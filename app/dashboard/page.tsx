@@ -55,8 +55,10 @@ export default function POSPage() {
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [activeStaffId, setActiveStaffId] = useState<string | null>(null);
-  const [newTabName, setNewTabName] = useState("");
-  const [newGuestCount, setNewGuestCount] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [modalName, setModalName] = useState("");
+  const [modalGuestCount, setModalGuestCount] = useState("");
+  const [modalStaffId, setModalStaffId] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
@@ -135,22 +137,29 @@ export default function POSPage() {
     return staff.find((s) => s.id === staffId)?.name ?? "(元スタッフ)";
   }
 
+  function openCreateModal() {
+    setModalName("");
+    setModalGuestCount("");
+    setModalStaffId(null);
+    setShowCreateModal(true);
+  }
+
   async function createTab() {
-    if (!storeId || !newTabName.trim()) return;
+    if (!storeId || !modalName.trim()) return;
     const { data, error } = await supabase
       .from("tabs")
       .insert({
         store_id: storeId,
         business_date: businessDate,
-        name: newTabName.trim(),
-        guest_count: newGuestCount.trim() === "" ? null : Number(newGuestCount),
+        name: modalName.trim(),
+        guest_count: modalGuestCount.trim() === "" ? null : Number(modalGuestCount),
       })
       .select()
       .single();
     if (!error && data) {
-      setNewTabName("");
-      setNewGuestCount("");
       setActiveTabId(data.id);
+      setActiveStaffId(modalStaffId);
+      setShowCreateModal(false);
       loadData();
     }
   }
@@ -299,27 +308,12 @@ export default function POSPage() {
               </button>
             );
           })}
-          <div className="flex gap-2 shrink-0">
-            <input
-              value={newTabName}
-              onChange={(e) => setNewTabName(e.target.value)}
-              placeholder="お客様名・卓番"
-              className="rounded-xl bg-bg2 border-2 border-line px-2 text-sm w-28"
-            />
-            <input
-              value={newGuestCount}
-              onChange={(e) => setNewGuestCount(e.target.value)}
-              placeholder="人数"
-              inputMode="numeric"
-              className="rounded-xl bg-bg2 border-2 border-line px-2 text-sm w-16"
-            />
-            <button
-              onClick={createTab}
-              className="rounded-xl px-3 py-2.5 text-sm font-bold border-2 border-dashed border-gold text-gold"
-            >
-              ＋ 新規
-            </button>
-          </div>
+          <button
+            onClick={openCreateModal}
+            className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold border-2 border-dashed border-gold text-gold whitespace-nowrap"
+          >
+            📝 伝票を作る
+          </button>
         </div>
 
         {closedTabs.length > 0 && (
@@ -632,6 +626,79 @@ export default function POSPage() {
       {!activeTab && (
         <div className="text-sm text-gray-500 text-center py-10 border border-dashed border-line rounded-xl">
           伝票を選択するか、新しく作成してください
+        </div>
+      )}
+
+      {showCreateModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-4 space-y-4"
+          >
+            <div className="text-gold font-bold text-base">伝票を作る</div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">名前・卓番</label>
+              <input
+                autoFocus
+                value={modalName}
+                onChange={(e) => setModalName(e.target.value)}
+                placeholder="例：田中様・3卓"
+                className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">人数（任意）</label>
+              <input
+                value={modalGuestCount}
+                onChange={(e) => setModalGuestCount(e.target.value)}
+                inputMode="numeric"
+                placeholder="例：4"
+                className="w-24 rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+              />
+            </div>
+
+            {staff.length > 0 && (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">担当スタッフ（任意）</label>
+                <div className="flex gap-2 flex-wrap">
+                  {staff.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setModalStaffId(modalStaffId === s.id ? null : s.id)}
+                      className={`rounded-full px-3 py-1.5 text-sm border ${
+                        modalStaffId === s.id
+                          ? "bg-gold text-bg border-gold"
+                          : "bg-bg2 text-gray-300 border-line"
+                      }`}
+                    >
+                      👤 {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={createTab}
+                disabled={!modalName.trim()}
+                className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold disabled:opacity-50"
+              >
+                作成する
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
