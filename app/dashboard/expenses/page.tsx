@@ -11,12 +11,12 @@ type Candidate = ReceiptCandidate & { checked: boolean };
 
 export default function ExpensesPage() {
   const supabase = createClient();
-  const { storeId } = useStore();
+  const { storeId, cutoffHour } = useStore();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
-  const businessDate = businessDateFor(new Date());
+  const businessDate = businessDateFor(new Date(), cutoffHour);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrLoading, setOcrLoading] = useState(false);

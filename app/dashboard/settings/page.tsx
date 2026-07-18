@@ -5,15 +5,28 @@ import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { MenuItem, Staff } from "@/lib/types";
 
+const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
+
 export default function SettingsPage() {
   const supabase = createClient();
-  const { storeId } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour, reload } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
   const [menuPrice, setMenuPrice] = useState("");
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
+
+  const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
+  const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
+  const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
+  const [savingStoreSettings, setSavingStoreSettings] = useState(false);
+
+  useEffect(() => {
+    setTaxRateDraft(String(Math.round(taxRate * 100)));
+    setCommissionRateDraft(String(Math.round(commissionRate * 100)));
+    setCutoffHourDraft(String(cutoffHour));
+  }, [taxRate, commissionRate, cutoffHour]);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -72,8 +85,70 @@ export default function SettingsPage() {
     loadData();
   }
 
+  async function saveStoreSettings() {
+    if (!storeId) return;
+    setSavingStoreSettings(true);
+    await supabase
+      .from("stores")
+      .update({
+        tax_rate: Number(taxRateDraft) / 100,
+        commission_rate: Number(commissionRateDraft) / 100,
+        business_day_cutoff_hour: Number(cutoffHourDraft),
+      })
+      .eq("id", storeId);
+    setSavingStoreSettings(false);
+    reload();
+  }
+
   return (
     <div className="space-y-6">
+      <div>
+        <div className="text-gold font-bold text-sm mb-2">店舗設定</div>
+        <div className="rounded-xl border border-line bg-elevated p-3 space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">消費税率（%）</label>
+            <input
+              value={taxRateDraft}
+              onChange={(e) => setTaxRateDraft(e.target.value)}
+              inputMode="numeric"
+              className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">歩合率（%）</label>
+            <input
+              value={commissionRateDraft}
+              onChange={(e) => setCommissionRateDraft(e.target.value)}
+              inputMode="numeric"
+              className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              営業日の切り替え時刻（この時刻より前は前日の営業として記録されます）
+            </label>
+            <select
+              value={cutoffHourDraft}
+              onChange={(e) => setCutoffHourDraft(e.target.value)}
+              className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            >
+              {CUTOFF_HOUR_OPTIONS.map((h) => (
+                <option key={h} value={h}>
+                  {h}時
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={saveStoreSettings}
+            disabled={savingStoreSettings}
+            className="rounded-md bg-gold text-bg px-3 py-1.5 text-sm font-bold disabled:opacity-50"
+          >
+            {savingStoreSettings ? "保存中..." : "保存する"}
+          </button>
+        </div>
+      </div>
+
       <div>
         <div className="text-gold font-bold text-sm mb-2">メニュー管理</div>
         <div className="rounded-xl border border-line bg-elevated divide-y divide-line mb-2">

@@ -14,14 +14,14 @@ import {
 
 export default function StaffPage() {
   const supabase = createClient();
-  const { storeId } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour } = useStore();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
   const [newName, setNewName] = useState("");
   const [newWage, setNewWage] = useState("");
   const [now, setNow] = useState(Date.now());
-  const businessDate = businessDateFor(new Date());
+  const businessDate = businessDateFor(new Date(), cutoffHour);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -65,7 +65,7 @@ export default function StaffPage() {
     return s ? s.name : "(元スタッフ)";
   }
 
-  const commission = staffCommissionBreakdown(tabs, staffName);
+  const commission = staffCommissionBreakdown(tabs, staffName, taxRate, commissionRate);
 
   function openAttendanceFor(staffId: string) {
     return attendance.find((a) => a.staff_id === staffId && !a.clock_out);
@@ -138,7 +138,8 @@ export default function StaffPage() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold">{s.name}</div>
                   <div className="text-xs text-gray-400">
-                    {s.hourly_wage != null ? `時給 ¥${s.hourly_wage.toLocaleString()}` : "時給未設定"}・歩合20%
+                    {s.hourly_wage != null ? `時給 ¥${s.hourly_wage.toLocaleString()}` : "時給未設定"}・歩合
+                    {Math.round(commissionRate * 100)}%
                   </div>
                   {open && (
                     <div className="text-xs text-gold mt-0.5">

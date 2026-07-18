@@ -18,7 +18,7 @@ import {
 } from "@/lib/types";
 import { generateInsights } from "@/lib/insights";
 
-type DayRow = { date: string } & DaySummary;
+type DayRow = { date: string; tabCount: number; guestCount: number } & DaySummary;
 
 function yen(n: number) {
   return `¥${Math.round(n).toLocaleString()}`;
@@ -36,8 +36,8 @@ function monthRange(d: Date) {
 
 export default function ReportPage() {
   const supabase = createClient();
-  const { storeId } = useStore();
-  const businessDate = businessDateFor(new Date());
+  const { storeId, storeName, taxRate, commissionRate, cutoffHour } = useStore();
+  const businessDate = businessDateFor(new Date(), cutoffHour);
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date());
 
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -111,10 +111,12 @@ export default function ReportPage() {
         const dTabs = ((monthTabs ?? []) as TabWithItems[]).filter((t) => t.business_date === date);
         const dAtt = ((monthAtt ?? []) as Attendance[]).filter((a) => a.business_date === date);
         const dExp = ((monthExp ?? []) as Expense[]).filter((e) => e.business_date === date);
-        return { date, ...daySummary(dTabs, dAtt, dExp, staffNameOf) };
+        const tabCount = dTabs.length;
+        const guestCount = dTabs.reduce((a, t) => a + (t.guest_count ?? 0), 0);
+        return { date, tabCount, guestCount, ...daySummary(dTabs, dAtt, dExp, staffNameOf, taxRate, commissionRate) };
       });
     setMonthRows(rows);
-  }, [storeId, businessDate, monthStart, monthEnd]);
+  }, [storeId, businessDate, monthStart, monthEnd, taxRate, commissionRate]);
 
   useEffect(() => {
     loadData();
@@ -126,8 +128,8 @@ export default function ReportPage() {
     return s ? s.name : "(元スタッフ)";
   }
 
-  const summary = daySummary(tabs, attendance, expenses, staffName);
-  const commission = staffCommissionBreakdown(tabs, staffName);
+  const summary = daySummary(tabs, attendance, expenses, staffName, taxRate, commissionRate);
+  const commission = staffCommissionBreakdown(tabs, staffName, taxRate, commissionRate);
   const tabRows = [...tabs].sort(
     (a, b) => Number(!!a.closed_at) - Number(!!b.closed_at) || tabSubtotal(b.tab_items) - tabSubtotal(a.tab_items)
   );
@@ -146,8 +148,24 @@ export default function ReportPage() {
       cash: a.cash + r.cash,
       card: a.card + r.card,
       unsettled: a.unsettled + r.unsettled,
+      tabCount: a.tabCount + r.tabCount,
+      guestCount: a.guestCount + r.guestCount,
     }),
-    { subtotal: 0, tax: 0, total: 0, laborHourly: 0, commissionTotal: 0, labor: 0, expense: 0, profit: 0, cash: 0, card: 0, unsettled: 0 }
+    {
+      subtotal: 0,
+      tax: 0,
+      total: 0,
+      laborHourly: 0,
+      commissionTotal: 0,
+      labor: 0,
+      expense: 0,
+      profit: 0,
+      cash: 0,
+      card: 0,
+      unsettled: 0,
+      tabCount: 0,
+      guestCount: 0,
+    }
   );
 
   async function exportExcel() {
@@ -183,8 +201,8 @@ export default function ReportPage() {
           退店: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
           品数: t.tab_items.reduce((a, i) => a + i.qty, 0),
           小計: Math.round(tabSubtotal(t.tab_items)),
-          消費税: Math.round(tabTax(t.tab_items)),
-          合計: Math.round(tabTotal(t.tab_items)),
+          消費税: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent)),
+          合計: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent)),
         }))
       );
       XLSX.utils.book_append_sheet(wb, tabSheet, "伝票別");
@@ -199,35 +217,35 @@ export default function ReportPage() {
       );
       XLSX.utils.book_append_sheet(wb, staffSheet, "スタッフ別歩合");
 
-      const monthSheet = XLSX.utils.json_to_sheet(
-        monthRows
-          .map((r) => ({
-            日付: r.date,
-            小計: Math.round(r.subtotal),
-            消費税: Math.round(r.tax),
-            合計: Math.round(r.total),
-            人件費時給: Math.round(r.laborHourly),
-            歩合給: Math.round(r.commissionTotal),
-            経費: Math.round(r.expense),
-            粗利: Math.round(r.profit),
-            現金: Math.round(r.cash),
-            カード: Math.round(r.card),
-          }))
-          .concat([
-            {
-              日付: "合計",
-              小計: Math.round(monthTotal.subtotal),
-              消費税: Math.round(monthTotal.tax),
-              合計: Math.round(monthTotal.total),
-              人件費時給: Math.round(monthTotal.laborHourly),
-              歩合給: Math.round(monthTotal.commissionTotal),
-              経費: Math.round(monthTotal.expense),
-              粗利: Math.round(monthTotal.profit),
-              現金: Math.round(monthTotal.cash),
-              カード: Math.round(monthTotal.card),
-            },
-          ])
-      );
+      // 月の売上管理表：日ごとの売上高・原価・粗利益・組数・人数（月内の全日を1〜末日まで表示）
+      const [monthYear, monthNum] = monthStart.split("-").map(Number);
+      const daysInMonth = new Date(monthYear, monthNum, 0).getDate();
+      const rowByDate = new Map(monthRows.map((r) => [r.date, r]));
+      const ledgerRows: (string | number)[][] = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
+        const r = rowByDate.get(date);
+        const sales = r ? Math.round(r.subtotal) : 0;
+        const cost = r ? Math.round(r.expense) : 0;
+        ledgerRows.push([day, sales, cost, sales - cost, r?.tabCount ?? 0, r?.guestCount ?? 0]);
+      }
+      const ledgerTotalSales = Math.round(monthTotal.subtotal);
+      const ledgerTotalCost = Math.round(monthTotal.expense);
+
+      const monthSheet = XLSX.utils.aoa_to_sheet([
+        ["月", storeName ?? ""],
+        ["", "売上高", "原価", "粗利益", "組数", "人数"],
+        ...ledgerRows,
+        [
+          "合計",
+          ledgerTotalSales,
+          ledgerTotalCost,
+          ledgerTotalSales - ledgerTotalCost,
+          monthTotal.tabCount,
+          monthTotal.guestCount,
+        ],
+      ]);
+      monthSheet["!cols"] = [{ wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }];
       XLSX.utils.book_append_sheet(wb, monthSheet, `月次(${monthLabel})`);
 
       XLSX.writeFile(wb, `BAR_TEVER_${businessDate}.xlsx`);
@@ -302,7 +320,7 @@ export default function ReportPage() {
                 <span className="text-gray-300">
                   {t.closed_at ? (t.payment_method === "cash" ? "💴" : "💳") : "🕐"} {t.name}
                 </span>
-                <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items))}</span>
+                <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items, taxRate, t.discount_percent))}</span>
               </div>
             ))}
           </div>

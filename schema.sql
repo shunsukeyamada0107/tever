@@ -10,10 +10,13 @@ create extension if not exists "pgcrypto";
 -- 1. 店舗（テナントの単位。TEVERも1店舗として登録する）
 -- ------------------------------------------------------------
 create table stores (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,                 -- 例: "BAR TEVER"
-  plan        text not null default 'trial' check (plan in ('trial','paid','suspended')),
-  created_at  timestamptz not null default now()
+  id                        uuid primary key default gen_random_uuid(),
+  name                      text not null,                 -- 例: "BAR TEVER"
+  plan                      text not null default 'trial' check (plan in ('trial','paid','suspended')),
+  tax_rate                  numeric not null default 0.10,  -- 消費税率（0.10=10%）
+  commission_rate           numeric not null default 0.20,  -- 歩合率（0.20=20%）
+  business_day_cutoff_hour  integer not null default 6,      -- 営業日の切り替え時刻（この時刻より前は前日扱い）
+  created_at                timestamptz not null default now()
 );
 
 -- ------------------------------------------------------------
@@ -67,6 +70,7 @@ create table tabs (
   payment_method  text check (payment_method in ('cash','card')),
   guest_count     integer,                             -- 人数（任意）
   course_ends_at  timestamptz,                          -- 飲み放題等コースの終了予定時刻（任意）
+  discount_percent numeric,                             -- 割引率（例: 30 = 30%OFF、任意）
   created_at      timestamptz not null default now(),  -- 来店
   closed_at       timestamptz                          -- 退店・会計
 );
@@ -139,6 +143,11 @@ create policy "users can see their own membership"
 
 create policy "store members can access their store"
   on stores for select using (id in (select my_store_ids()));
+
+create policy "store owners can update their store"
+  on stores for update using (
+    id in (select store_id from store_members where user_id = auth.uid() and role = 'owner')
+  );
 
 create policy "store members can access their staff"
   on staff for all using (store_id in (select my_store_ids()));
