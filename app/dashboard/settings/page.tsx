@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
   const [menuPrice, setMenuPrice] = useState("");
+  const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
@@ -46,9 +47,11 @@ export default function SettingsPage() {
       store_id: storeId,
       name: menuName.trim(),
       price: Number(menuPrice),
+      course_minutes: menuCourseMinutes.trim() === "" ? null : Number(menuCourseMinutes),
     });
     setMenuName("");
     setMenuPrice("");
+    setMenuCourseMinutes("");
     loadData();
   }
 
@@ -81,6 +84,9 @@ export default function SettingsPage() {
             <div key={m.id} className="flex justify-between items-center px-3 py-2 text-sm">
               <span className="text-gray-300">
                 {m.name}・¥{m.price.toLocaleString()}
+                {m.course_minutes != null && (
+                  <span className="text-xs text-gray-500"> ・⏱{m.course_minutes}分コース</span>
+                )}
               </span>
               <button onClick={() => removeMenuItem(m.id)} className="text-rose text-xs">
                 削除
@@ -100,6 +106,13 @@ export default function SettingsPage() {
             onChange={(e) => setMenuPrice(e.target.value)}
             placeholder="金額"
             inputMode="numeric"
+            className="w-20 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+          />
+          <input
+            value={menuCourseMinutes}
+            onChange={(e) => setMenuCourseMinutes(e.target.value)}
+            placeholder="コース分(任意)"
+            inputMode="numeric"
             className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
           />
           <button
@@ -108,6 +121,9 @@ export default function SettingsPage() {
           >
             ＋ 追加
           </button>
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          「コース分」は飲み放題など時間制メニュー用です。設定すると、営業タブでこのメニューをタップした瞬間に伝票へタイマーがセットされます
         </div>
       </div>
 

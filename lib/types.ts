@@ -11,6 +11,7 @@ export type MenuItem = {
   store_id: string;
   name: string;
   price: number;
+  course_minutes: number | null;
   active: boolean;
 };
 
@@ -21,6 +22,8 @@ export type Tab = {
   name: string;
   memo: string;
   payment_method: "cash" | "card" | null;
+  guest_count: number | null;
+  course_ends_at: string | null;
   created_at: string; // 来店
   closed_at: string | null; // 退店・会計
 };
@@ -77,6 +80,15 @@ export function tabTax(items: TabItem[]) {
 
 export function tabTotal(items: TabItem[]) {
   return tabSubtotal(items) + tabTax(items);
+}
+
+// 伝票ごとに見分けやすいよう、IDから決定的に色を割り当てる
+const TAB_COLOR_PALETTE = ["#DCA84E", "#6FB3E0", "#7FCB8F", "#E08A6F", "#B78FE0", "#E0C36F", "#6FCBC0", "#E06F9E"];
+
+export function tabColorFor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return TAB_COLOR_PALETTE[hash % TAB_COLOR_PALETTE.length];
 }
 
 // 営業日：朝6時基準（深夜0時をまたいでも同じ営業日として扱う）

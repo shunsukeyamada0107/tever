@@ -45,12 +45,13 @@ create table staff (
 -- 4. メニュー
 -- ------------------------------------------------------------
 create table menu_items (
-  id          uuid primary key default gen_random_uuid(),
-  store_id    uuid not null references stores(id) on delete cascade,
-  name        text not null,
-  price       numeric not null check (price >= 0),
-  active      boolean not null default true,
-  created_at  timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  store_id        uuid not null references stores(id) on delete cascade,
+  name            text not null,
+  price           numeric not null check (price >= 0),
+  course_minutes  integer,           -- 飲み放題等コースの場合の時間（分）。null=通常メニュー
+  active          boolean not null default true,
+  created_at      timestamptz not null default now()
 );
 
 -- ------------------------------------------------------------
@@ -64,6 +65,8 @@ create table tabs (
   name            text not null,      -- お客様名・卓番
   memo            text not null default '',
   payment_method  text check (payment_method in ('cash','card')),
+  guest_count     integer,                             -- 人数（任意）
+  course_ends_at  timestamptz,                          -- 飲み放題等コースの終了予定時刻（任意）
   created_at      timestamptz not null default now(),  -- 来店
   closed_at       timestamptz                          -- 退店・会計
 );

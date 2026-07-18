@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import {
@@ -8,10 +8,43 @@ import {
   Staff,
   TabWithItems,
   businessDateFor,
+  tabColorFor,
   tabSubtotal,
   tabTax,
   tabTotal,
 } from "@/lib/types";
+
+const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
+function CourseTimerBadge({ endsAt, now }: { endsAt: string; now: number }) {
+  const remaining = new Date(endsAt).getTime() - now;
+  if (remaining <= 0) {
+    return (
+      <div className="rounded-md bg-rose/20 text-rose text-xs font-bold px-2 py-1.5 inline-block">
+        ⏰ コース終了時刻を過ぎています
+      </div>
+    );
+  }
+  const mins = Math.floor(remaining / 60000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const lastOrder = remaining <= LAST_ORDER_WINDOW_MS;
+  return (
+    <div
+      className={`rounded-md text-xs font-bold px-2 py-1.5 inline-block ${
+        lastOrder ? "bg-rose/20 text-rose" : "bg-gold/20 text-gold"
+      }`}
+    >
+      {lastOrder ? "⏰ ラストオーダー・" : "🍺 コース残り "}
+      {h > 0 ? `${h}時間` : ""}
+      {m}分（{formatTime(endsAt)}まで）
+    </div>
+  );
+}
 
 export default function POSPage() {
   const supabase = createClient();
@@ -22,9 +55,12 @@ export default function POSPage() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [activeStaffId, setActiveStaffId] = useState<string | null>(null);
   const [newTabName, setNewTabName] = useState("");
+  const [newGuestCount, setNewGuestCount] = useState("");
   const [memoDraft, setMemoDraft] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
+  const [now, setNow] = useState(Date.now());
+  const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | null>(null);
   const businessDate = businessDateFor(new Date());
 
   const loadData = useCallback(async () => {
@@ -48,13 +84,44 @@ export default function POSPage() {
       .select("*, tab_items(*)")
       .eq("store_id", storeId)
       .eq("business_date", businessDate)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .order("created_at", { foreignTable: "tab_items", ascending: true });
     setTabs((tabsData as TabWithItems[]) ?? []);
   }, [storeId, businessDate]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined") setNotifyPermission(Notification.permission);
+  }, []);
+
+  // ラストオーダー判定・タイマー表示のための定期更新
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 20000);
+    return () => clearInterval(t);
+  }, []);
+
+  // コース終了30分前になったら通知（伝票ごとに1回だけ）
+  const notifiedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (notifyPermission !== "granted") return;
+    tabs.forEach((t) => {
+      if (!t.course_ends_at || t.closed_at) return;
+      const remaining = new Date(t.course_ends_at).getTime() - now;
+      if (remaining <= LAST_ORDER_WINDOW_MS && remaining > 0 && !notifiedRef.current.has(t.id)) {
+        notifiedRef.current.add(t.id);
+        new Notification("ラストオーダーの時間です", { body: `${t.name} のコースがまもなく終了します` });
+      }
+    });
+  }, [tabs, now, notifyPermission]);
+
+  async function requestNotifyPermission() {
+    if (typeof Notification === "undefined") return;
+    const p = await Notification.requestPermission();
+    setNotifyPermission(p);
+  }
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -71,11 +138,17 @@ export default function POSPage() {
     if (!storeId || !newTabName.trim()) return;
     const { data, error } = await supabase
       .from("tabs")
-      .insert({ store_id: storeId, business_date: businessDate, name: newTabName.trim() })
+      .insert({
+        store_id: storeId,
+        business_date: businessDate,
+        name: newTabName.trim(),
+        guest_count: newGuestCount.trim() === "" ? null : Number(newGuestCount),
+      })
       .select()
       .single();
     if (!error && data) {
       setNewTabName("");
+      setNewGuestCount("");
       setActiveTabId(data.id);
       loadData();
     }
@@ -103,6 +176,21 @@ export default function POSPage() {
         staff_id: activeStaffId,
       });
     }
+    // 飲み放題等のコースメニューなら、伝票にタイマーをセット（起点はタップ時点から）
+    if (item.course_minutes) {
+      const endsAt = new Date(Date.now() + item.course_minutes * 60000).toISOString();
+      await supabase.from("tabs").update({ course_ends_at: endsAt }).eq("id", activeTab.id);
+      notifiedRef.current.delete(activeTab.id);
+    }
+    loadData();
+  }
+
+  async function saveGuestCount(count: string) {
+    if (!activeTab) return;
+    await supabase
+      .from("tabs")
+      .update({ guest_count: count.trim() === "" ? null : Number(count) })
+      .eq("id", activeTab.id);
     loadData();
   }
 
@@ -178,20 +266,29 @@ export default function POSPage() {
         <div className="flex gap-2 overflow-x-auto pb-1">
           {openTabs.map((t) => {
             const active = t.id === activeTabId;
+            const remaining = t.course_ends_at ? new Date(t.course_ends_at).getTime() - now : null;
+            const lastOrder = remaining !== null && remaining > 0 && remaining <= LAST_ORDER_WINDOW_MS;
             return (
               <button
                 key={t.id}
                 onClick={() => setActiveTabId(t.id)}
+                style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
                 className={`shrink-0 min-w-[104px] text-left rounded-xl px-3 py-2.5 border-2 ${
                   active
                     ? "bg-gold border-gold text-bg"
                     : "bg-elevated border-line text-gray-200"
                 }`}
               >
-                <div className="text-sm font-bold truncate">{t.name}</div>
+                <div className="text-sm font-bold truncate">
+                  {t.name}
+                  {t.guest_count != null && <span className="font-normal"> ・{t.guest_count}名</span>}
+                </div>
                 <div className={`text-xs font-mono mt-0.5 ${active ? "text-bg/70" : "text-gray-400"}`}>
                   ¥{tabTotal(t.tab_items).toLocaleString()}
                 </div>
+                {lastOrder && (
+                  <div className="text-xs font-bold mt-0.5 text-rose">⏰ ラストオーダー</div>
+                )}
               </button>
             );
           })}
@@ -200,7 +297,14 @@ export default function POSPage() {
               value={newTabName}
               onChange={(e) => setNewTabName(e.target.value)}
               placeholder="お客様名・卓番"
-              className="rounded-xl bg-bg2 border-2 border-line px-2 text-sm w-32"
+              className="rounded-xl bg-bg2 border-2 border-line px-2 text-sm w-28"
+            />
+            <input
+              value={newGuestCount}
+              onChange={(e) => setNewGuestCount(e.target.value)}
+              placeholder="人数"
+              inputMode="numeric"
+              className="rounded-xl bg-bg2 border-2 border-line px-2 text-sm w-16"
             />
             <button
               onClick={createTab}
@@ -221,6 +325,7 @@ export default function POSPage() {
                   <button
                     key={t.id}
                     onClick={() => setActiveTabId(t.id)}
+                    style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
                     className={`shrink-0 min-w-[104px] text-left rounded-xl px-3 py-2.5 border-2 opacity-70 ${
                       active ? "border-gold text-gray-200" : "border-line text-gray-400"
                     } bg-elevated`}
@@ -241,7 +346,10 @@ export default function POSPage() {
 
       {activeTab && (
         <>
-          <div className="rounded-xl border border-line bg-elevated p-4 space-y-3">
+          <div
+            style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
+            className="rounded-xl border border-line bg-elevated p-4 space-y-3"
+          >
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-lg">{activeTab.name}</span>
@@ -257,6 +365,37 @@ export default function POSPage() {
                 伝票を削除
               </button>
             </div>
+
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span>
+                来店 {formatTime(activeTab.created_at)}
+                {activeTab.closed_at && <> ・退店 {formatTime(activeTab.closed_at)}</>}
+              </span>
+              {!activeTab.closed_at && (
+                <span className="flex items-center gap-1">
+                  人数
+                  <input
+                    defaultValue={activeTab.guest_count ?? ""}
+                    onBlur={(e) => saveGuestCount(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="-"
+                    className="w-12 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs text-center"
+                  />
+                  名
+                </span>
+              )}
+            </div>
+
+            {activeTab.course_ends_at && <CourseTimerBadge endsAt={activeTab.course_ends_at} now={now} />}
+
+            {notifyPermission === "default" && (
+              <button
+                onClick={requestNotifyPermission}
+                className="text-xs rounded-md border border-dashed border-line px-2 py-1 text-gray-400"
+              >
+                🔔 ラストオーダー通知を有効にする
+              </button>
+            )}
 
             <div className="rounded-lg bg-bg2 px-3 py-2 font-mono text-sm space-y-1">
               <div className="flex justify-between text-gray-400">
@@ -348,10 +487,17 @@ export default function POSPage() {
                   key={m.id}
                   onClick={() => addMenuItem(m)}
                   disabled={!!activeTab.closed_at}
-                  className="rounded-lg border border-line bg-elevated p-3 text-left disabled:opacity-40"
+                  className="group rounded-lg border border-line bg-elevated p-3 text-left disabled:opacity-40 active:bg-gold active:border-gold transition-colors"
                 >
-                  <div className="text-sm font-bold">{m.name}</div>
-                  <div className="text-xs text-gold font-mono">¥{m.price.toLocaleString()}</div>
+                  <div className="text-sm font-bold group-active:text-bg">
+                    {m.name}
+                    {m.course_minutes != null && (
+                      <span className="text-xs font-normal opacity-70"> ・⏱{m.course_minutes}分</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gold font-mono group-active:text-bg">
+                    ¥{m.price.toLocaleString()}
+                  </div>
                 </button>
               ))}
             </div>
