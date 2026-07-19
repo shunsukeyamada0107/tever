@@ -3,25 +3,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
-import {
-  Staff,
-  Attendance,
-  TabWithItems,
-  businessDateFor,
-  attHours,
-  staffCommissionBreakdown,
-} from "@/lib/types";
+import { useBusinessDate } from "@/lib/BusinessDateContext";
+import { DateBar } from "@/lib/DateBar";
+import { Staff, Attendance, TabWithItems, attHours, staffCommissionBreakdown } from "@/lib/types";
 
 export default function StaffPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate, cutoffHour } = useStore();
+  const { storeId, taxRate, commissionRate } = useStore();
+  const { date: businessDate, isToday } = useBusinessDate();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
   const [newName, setNewName] = useState("");
   const [newWage, setNewWage] = useState("");
   const [now, setNow] = useState(Date.now());
-  const businessDate = businessDateFor(new Date(), cutoffHour);
+  const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -32,6 +28,9 @@ export default function StaffPage() {
       .eq("active", true)
       .order("created_at", { ascending: true });
     setStaff(staffData ?? []);
+    setWageDrafts(
+      Object.fromEntries((staffData ?? []).map((s) => [s.id, s.hourly_wage != null ? String(s.hourly_wage) : ""]))
+    );
 
     const { data: attData } = await supabase
       .from("attendance")
@@ -98,6 +97,13 @@ export default function StaffPage() {
     loadData();
   }
 
+  async function saveWage(staffId: string) {
+    const raw = wageDrafts[staffId] ?? "";
+    const wage = raw.trim() === "" ? null : Number(raw);
+    await supabase.from("staff").update({ hourly_wage: wage }).eq("id", staffId);
+    loadData();
+  }
+
   async function addStaff() {
     if (!storeId || !newName.trim()) return;
     const wage = newWage.trim() === "" ? null : Number(newWage);
@@ -113,8 +119,14 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-6">
+      <DateBar />
       <div>
         <div className="text-gold font-bold text-sm mb-2">出退勤</div>
+        {!isToday && (
+          <div className="text-xs text-gray-500 mb-2">
+            過去/未来の日付では出退勤の記録は追加できません（閲覧のみ）
+          </div>
+        )}
         {staff.length === 0 && (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl mb-3">
             スタッフが未登録です。下のフォームから追加してください
@@ -137,9 +149,23 @@ export default function StaffPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold">{s.name}</div>
-                  <div className="text-xs text-gray-400">
-                    {s.hourly_wage != null ? `時給 ¥${s.hourly_wage.toLocaleString()}` : "時給未設定"}・歩合
-                    {Math.round(commissionRate * 100)}%
+                  <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
+                    時給
+                    <input
+                      value={wageDrafts[s.id] ?? ""}
+                      onChange={(e) => setWageDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
+                      placeholder="未設定"
+                      inputMode="numeric"
+                      className="w-16 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs"
+                    />
+                    円・歩合{Math.round(commissionRate * 100)}%
+                    <button
+                      onClick={() => saveWage(s.id)}
+                      disabled={(wageDrafts[s.id] ?? "") === (s.hourly_wage != null ? String(s.hourly_wage) : "")}
+                      className="rounded-md border border-line px-1.5 py-0.5 text-gray-300 disabled:opacity-30"
+                    >
+                      保存
+                    </button>
                   </div>
                   {open && (
                     <div className="text-xs text-gold mt-0.5">
@@ -148,21 +174,23 @@ export default function StaffPage() {
                   )}
                   {staffComm && (
                     <div className="text-xs text-gray-400 mt-0.5">
-                      本日の歩合 ¥{Math.round(staffComm.commission).toLocaleString()}
+                      {isToday ? "本日" : "この日"}の歩合 ¥{Math.round(staffComm.commission).toLocaleString()}
                     </div>
                   )}
                 </div>
                 {open ? (
                   <button
                     onClick={() => clockOut(s)}
-                    className="text-xs rounded-md bg-rose text-white px-3 py-1.5 font-bold shrink-0"
+                    disabled={!isToday}
+                    className="text-xs rounded-md bg-rose text-white px-3 py-1.5 font-bold shrink-0 disabled:opacity-40"
                   >
                     退勤
                   </button>
                 ) : (
                   <button
                     onClick={() => clockIn(s)}
-                    className="text-xs rounded-md bg-gold text-bg px-3 py-1.5 font-bold shrink-0"
+                    disabled={!isToday}
+                    className="text-xs rounded-md bg-gold text-bg px-3 py-1.5 font-bold shrink-0 disabled:opacity-40"
                   >
                     出勤
                   </button>
@@ -196,7 +224,7 @@ export default function StaffPage() {
       </div>
 
       <div>
-        <div className="text-gold font-bold text-sm mb-2">本日の勤怠記録</div>
+        <div className="text-gold font-bold text-sm mb-2">{isToday ? "本日" : businessDate}の勤怠記録</div>
         {attendance.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             まだ記録がありません

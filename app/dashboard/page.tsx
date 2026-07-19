@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
+import { useBusinessDate } from "@/lib/BusinessDateContext";
+import { DateBar } from "@/lib/DateBar";
 import {
   MenuItem,
   Staff,
   TabWithItems,
-  businessDateFor,
   tabColorFor,
   tabDiscountAmount,
   tabSubtotal,
@@ -49,7 +50,8 @@ function CourseTimerBadge({ endsAt, now }: { endsAt: string; now: number }) {
 
 export default function POSPage() {
   const supabase = createClient();
-  const { storeId, taxRate, cutoffHour } = useStore();
+  const { storeId, taxRate } = useStore();
+  const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
@@ -62,9 +64,9 @@ export default function POSPage() {
   const [memoDraft, setMemoDraft] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
+  const [manualDiscount, setManualDiscount] = useState("");
   const [now, setNow] = useState(Date.now());
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | null>(null);
-  const businessDate = businessDateFor(new Date(), cutoffHour);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -94,6 +96,7 @@ export default function POSPage() {
 
   useEffect(() => {
     loadData();
+    setActiveTabId(null);
   }, [loadData]);
 
   useEffect(() => {
@@ -246,6 +249,22 @@ export default function POSPage() {
     loadData();
   }
 
+  async function applyManualDiscount() {
+    if (!activeTab || !manualDiscount.trim()) return;
+    await supabase
+      .from("tabs")
+      .update({ discount_amount: Number(manualDiscount) })
+      .eq("id", activeTab.id);
+    setManualDiscount("");
+    loadData();
+  }
+
+  async function clearManualDiscount() {
+    if (!activeTab) return;
+    await supabase.from("tabs").update({ discount_amount: null }).eq("id", activeTab.id);
+    loadData();
+  }
+
   async function settleTab(method: "cash" | "card") {
     if (!activeTab) return;
     await supabase
@@ -277,6 +296,7 @@ export default function POSPage() {
 
   return (
     <div className="space-y-4">
+      <DateBar />
       <div>
         <div className="text-gold font-bold text-sm mb-2">伝票（お客様・卓）・対応中 {openTabs.length}件</div>
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -300,7 +320,7 @@ export default function POSPage() {
                   {t.guest_count != null && <span className="font-normal"> ・{t.guest_count}名</span>}
                 </div>
                 <div className={`text-xs font-mono mt-0.5 ${active ? "text-bg/70" : "text-gray-400"}`}>
-                  ¥{tabTotal(t.tab_items, taxRate, t.discount_percent).toLocaleString()}
+                  ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
                 </div>
                 {lastOrder && (
                   <div className="text-xs font-bold mt-0.5 text-rose">⏰ ラストオーダー</div>
@@ -335,7 +355,7 @@ export default function POSPage() {
                       {t.payment_method === "cash" ? "💴" : "💳"} {t.name}
                     </div>
                     <div className="text-xs font-mono mt-0.5">
-                      ¥{tabTotal(t.tab_items, taxRate, t.discount_percent).toLocaleString()}
+                      ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
                     </div>
                   </button>
                 );
@@ -403,45 +423,96 @@ export default function POSPage() {
                 <span>小計</span>
                 <span>¥{tabSubtotal(activeTab.tab_items).toLocaleString()}</span>
               </div>
-              {!!activeTab.discount_percent && (
+              {!!(activeTab.discount_percent || activeTab.discount_amount) && (
                 <div className="flex justify-between text-rose">
-                  <span>割引（{activeTab.discount_percent}%OFF）</span>
-                  <span>-¥{tabDiscountAmount(activeTab.tab_items, activeTab.discount_percent).toLocaleString()}</span>
+                  <span>
+                    割引
+                    {activeTab.discount_percent ? `（${activeTab.discount_percent}%OFF）` : ""}
+                  </span>
+                  <span>
+                    -¥
+                    {tabDiscountAmount(
+                      activeTab.tab_items,
+                      activeTab.discount_percent,
+                      activeTab.discount_amount
+                    ).toLocaleString()}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-gray-400">
                 <span>消費税</span>
-                <span>¥{tabTax(activeTab.tab_items, taxRate, activeTab.discount_percent).toLocaleString()}</span>
+                <span>
+                  ¥
+                  {tabTax(
+                    activeTab.tab_items,
+                    taxRate,
+                    activeTab.discount_percent,
+                    activeTab.discount_amount
+                  ).toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between text-gold font-bold text-lg pt-1 border-t border-dashed border-line">
                 <span>合計</span>
-                <span>¥{tabTotal(activeTab.tab_items, taxRate, activeTab.discount_percent).toLocaleString()}</span>
+                <span>
+                  ¥
+                  {tabTotal(
+                    activeTab.tab_items,
+                    taxRate,
+                    activeTab.discount_percent,
+                    activeTab.discount_amount
+                  ).toLocaleString()}
+                </span>
               </div>
             </div>
 
             {!activeTab.closed_at && (
-              <div className="flex gap-2">
-                {[30, 50].map((p) => (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {[30, 50].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setDiscount(activeTab.discount_percent === p ? null : p)}
+                      className={`text-xs rounded-md px-3 py-1.5 font-bold border ${
+                        activeTab.discount_percent === p
+                          ? "bg-rose text-white border-rose"
+                          : "border-line text-gray-300"
+                      }`}
+                    >
+                      🎟 {p}%OFF
+                    </button>
+                  ))}
+                  {activeTab.discount_percent != null && (
+                    <button
+                      onClick={() => setDiscount(null)}
+                      className="text-xs rounded-md px-3 py-1.5 border border-line text-gray-400"
+                    >
+                      割引解除
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={manualDiscount}
+                    onChange={(e) => setManualDiscount(e.target.value)}
+                    placeholder="値引き額（円）"
+                    inputMode="numeric"
+                    className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                  />
                   <button
-                    key={p}
-                    onClick={() => setDiscount(activeTab.discount_percent === p ? null : p)}
-                    className={`text-xs rounded-md px-3 py-1.5 font-bold border ${
-                      activeTab.discount_percent === p
-                        ? "bg-rose text-white border-rose"
-                        : "border-line text-gray-300"
-                    }`}
+                    onClick={applyManualDiscount}
+                    className="text-xs rounded-md px-3 py-1.5 font-bold border border-dashed border-rose text-rose shrink-0"
                   >
-                    🎟 {p}%OFF
+                    値引き適用
                   </button>
-                ))}
-                {activeTab.discount_percent != null && (
-                  <button
-                    onClick={() => setDiscount(null)}
-                    className="text-xs rounded-md px-3 py-1.5 border border-line text-gray-400"
-                  >
-                    割引解除
-                  </button>
-                )}
+                  {activeTab.discount_amount != null && (
+                    <button
+                      onClick={clearManualDiscount}
+                      className="text-xs rounded-md px-3 py-1.5 border border-line text-gray-400 shrink-0"
+                    >
+                      解除
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

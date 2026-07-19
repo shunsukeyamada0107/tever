@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
-import { Expense, EXPENSE_CATEGORIES, businessDateFor } from "@/lib/types";
+import { useBusinessDate } from "@/lib/BusinessDateContext";
+import { DateBar } from "@/lib/DateBar";
+import { Expense, EXPENSE_CATEGORIES } from "@/lib/types";
 import { parseReceiptText, ReceiptCandidate } from "@/lib/receiptParser";
 import { preprocessReceiptImage } from "@/lib/receiptImage";
 
@@ -11,12 +13,12 @@ type Candidate = ReceiptCandidate & { checked: boolean };
 
 export default function ExpensesPage() {
   const supabase = createClient();
-  const { storeId, cutoffHour } = useStore();
+  const { storeId } = useStore();
+  const { date: businessDate } = useBusinessDate();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
-  const businessDate = businessDateFor(new Date(), cutoffHour);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -118,6 +120,7 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-6">
+      <DateBar />
       <div>
         <div className="text-gold font-bold text-sm mb-2">レシートから読み取る</div>
         <input
@@ -238,7 +241,7 @@ export default function ExpensesPage() {
 
       <div>
         <div className="flex justify-between items-center mb-2">
-          <div className="text-gold font-bold text-sm">本日の経費</div>
+          <div className="text-gold font-bold text-sm">{businessDate}の経費</div>
           <div className="text-sm font-mono text-gray-300">計 ¥{total.toLocaleString()}</div>
         </div>
         {expenses.length === 0 ? (

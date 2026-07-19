@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { StoreProvider, useStore } from "@/lib/StoreContext";
+import { BusinessDateProvider } from "@/lib/BusinessDateContext";
 
 const TABS = [
   { href: "/dashboard", label: "営業" },
@@ -27,23 +28,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   return (
     <StoreProvider>
-      <div className="min-h-screen pb-20">
-        <HeaderBar />
-        <main className="p-4">{children}</main>
-        <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">
-          {TABS.map((tab) => (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={`flex-1 text-center py-3 text-xs font-bold ${
-                pathname === tab.href ? "text-gold" : "text-gray-400"
-              }`}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <BusinessDateProvider>
+        <div className="min-h-screen pb-20">
+          <HeaderBar />
+          <main className="p-4">{children}</main>
+          <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">
+            {TABS.map((tab) => (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`flex-1 text-center py-3 text-xs font-bold ${
+                  pathname === tab.href ? "text-gold" : "text-gray-400"
+                }`}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </BusinessDateProvider>
     </StoreProvider>
   );
 }

@@ -25,6 +25,7 @@ export type Tab = {
   guest_count: number | null;
   course_ends_at: string | null;
   discount_percent: number | null;
+  discount_amount: number | null;
   created_at: string; // 来店
   closed_at: string | null; // 退店・会計
 };
@@ -77,23 +78,34 @@ export function tabSubtotal(items: TabItem[]) {
   return items.reduce((a, i) => a + itemSubtotal(i), 0);
 }
 
-// 割引額（税抜小計に対して割引率をかけた金額）
-export function tabDiscountAmount(items: TabItem[], discountPercent: number | null | undefined) {
-  if (!discountPercent) return 0;
-  return Math.round(tabSubtotal(items) * (discountPercent / 100));
+// 割引額（％割引 + 自由入力の値引き額の合計。税抜小計を超えない）
+export function tabDiscountAmount(
+  items: TabItem[],
+  discountPercent: number | null | undefined,
+  discountAmount: number | null | undefined = null
+) {
+  const sub = tabSubtotal(items);
+  const percentPart = discountPercent ? Math.round(sub * (discountPercent / 100)) : 0;
+  const fixedPart = discountAmount ?? 0;
+  return Math.min(sub, percentPart + fixedPart);
 }
 
 // 割引後の税抜小計（消費税の計算対象）
-export function tabTaxableSubtotal(items: TabItem[], discountPercent: number | null | undefined) {
-  return tabSubtotal(items) - tabDiscountAmount(items, discountPercent);
+export function tabTaxableSubtotal(
+  items: TabItem[],
+  discountPercent: number | null | undefined,
+  discountAmount: number | null | undefined = null
+) {
+  return tabSubtotal(items) - tabDiscountAmount(items, discountPercent, discountAmount);
 }
 
 export function tabTax(
   items: TabItem[],
   taxRate: number = DEFAULT_TAX_RATE,
-  discountPercent: number | null | undefined = null
+  discountPercent: number | null | undefined = null,
+  discountAmount: number | null | undefined = null
 ) {
-  return Math.round(tabTaxableSubtotal(items, discountPercent) * taxRate);
+  return Math.round(tabTaxableSubtotal(items, discountPercent, discountAmount) * taxRate);
 }
 
 // 会計時の端数は100円単位で切り上げる（例: 1120円→1200円）
@@ -104,9 +116,12 @@ export function roundUpTo100(n: number) {
 export function tabTotal(
   items: TabItem[],
   taxRate: number = DEFAULT_TAX_RATE,
-  discountPercent: number | null | undefined = null
+  discountPercent: number | null | undefined = null,
+  discountAmount: number | null | undefined = null
 ) {
-  const raw = tabTaxableSubtotal(items, discountPercent) + tabTax(items, taxRate, discountPercent);
+  const raw =
+    tabTaxableSubtotal(items, discountPercent, discountAmount) +
+    tabTax(items, taxRate, discountPercent, discountAmount);
   return roundUpTo100(raw);
 }
 
@@ -156,8 +171,9 @@ export function staffCommissionBreakdown(
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
     if (!t.closed_at) return;
-    // 伝票に割引がある場合、各スタッフの売上にも同じ割引率を按分して適用する
-    const discountFactor = 1 - (t.discount_percent ?? 0) / 100;
+    // 伝票に割引がある場合、各スタッフの売上にも同じ割引を按分して適用する
+    const sub = tabSubtotal(t.tab_items);
+    const discountFactor = sub > 0 ? 1 - tabDiscountAmount(t.tab_items, t.discount_percent, t.discount_amount) / sub : 1;
     const byStaff: Record<string, number> = {};
     t.tab_items.forEach((i) => {
       const key = i.staff_id ?? "unassigned";
@@ -199,8 +215,11 @@ export function daySummary(
   taxRate: number = DEFAULT_TAX_RATE,
   commissionRate: number = DEFAULT_COMMISSION_RATE
 ): DaySummary {
-  const subtotal = tabs.reduce((a, t) => a + tabTaxableSubtotal(t.tab_items, t.discount_percent), 0);
-  const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate, t.discount_percent), 0);
+  const subtotal = tabs.reduce(
+    (a, t) => a + tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount),
+    0
+  );
+  const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount), 0);
   const total = subtotal + tax;
   const laborHourly = dayLaborCost(attendance);
   const commissionTotal = staffCommissionBreakdown(tabs, staffNameOf, taxRate, commissionRate).reduce(
@@ -213,7 +232,7 @@ export function daySummary(
     card = 0,
     unsettled = 0;
   tabs.forEach((t) => {
-    const tot = tabTotal(t.tab_items, taxRate, t.discount_percent);
+    const tot = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
     if (t.closed_at && t.payment_method === "cash") cash += tot;
     else if (t.closed_at && t.payment_method === "card") card += tot;
     else unsettled += tot;

@@ -3,13 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
+import { useBusinessDate } from "@/lib/BusinessDateContext";
+import { DateBar } from "@/lib/DateBar";
 import {
   Staff,
   Attendance,
   Expense,
   TabWithItems,
   DaySummary,
-  businessDateFor,
   tabSubtotal,
   tabTax,
   tabTotal,
@@ -36,9 +37,9 @@ function monthRange(d: Date) {
 
 export default function ReportPage() {
   const supabase = createClient();
-  const { storeId, storeName, taxRate, commissionRate, cutoffHour } = useStore();
-  const businessDate = businessDateFor(new Date(), cutoffHour);
-  const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date());
+  const { storeId, storeName, taxRate, commissionRate } = useStore();
+  const { date: businessDate } = useBusinessDate();
+  const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
 
   const [staff, setStaff] = useState<Staff[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
@@ -201,8 +202,8 @@ export default function ReportPage() {
           退店: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
           品数: t.tab_items.reduce((a, i) => a + i.qty, 0),
           小計: Math.round(tabSubtotal(t.tab_items)),
-          消費税: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent)),
-          合計: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent)),
+          消費税: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
+          合計: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
         }))
       );
       XLSX.utils.book_append_sheet(wb, tabSheet, "伝票別");
@@ -256,8 +257,9 @@ export default function ReportPage() {
 
   return (
     <div className="space-y-6">
+      <DateBar />
       <div className="flex justify-between items-center">
-        <div className="text-gold font-bold text-sm">本日サマリー（{businessDate}）</div>
+        <div className="text-gold font-bold text-sm">サマリー（{businessDate}）</div>
         <button
           onClick={exportExcel}
           disabled={exporting}
@@ -320,7 +322,7 @@ export default function ReportPage() {
                 <span className="text-gray-300">
                   {t.closed_at ? (t.payment_method === "cash" ? "💴" : "💳") : "🕐"} {t.name}
                 </span>
-                <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items, taxRate, t.discount_percent))}</span>
+                <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}</span>
               </div>
             ))}
           </div>
