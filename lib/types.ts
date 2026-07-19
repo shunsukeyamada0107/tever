@@ -161,7 +161,8 @@ export type StaffCommission = {
   commission: number;
 };
 
-// 歩合給: 会計済み（closed_atがある）伝票の売上のうち、そのスタッフが記録した分の歩合率（税込ベース）
+// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）のうち、
+// そのスタッフが記録した分を按分して歩合率をかける（切り上げ分もスタッフの取り分に含まれる）
 export function staffCommissionBreakdown(
   tabs: TabWithItems[],
   staffNameOf: (staffId: string | null) => string,
@@ -171,23 +172,30 @@ export function staffCommissionBreakdown(
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
     if (!t.closed_at) return;
-    // 伝票に割引がある場合、各スタッフの売上にも同じ割引を按分して適用する
     const sub = tabSubtotal(t.tab_items);
-    const discountFactor = sub > 0 ? 1 - tabDiscountAmount(t.tab_items, t.discount_percent, t.discount_amount) / sub : 1;
+    if (sub <= 0) return;
+    // 伝票に割引がある場合、各スタッフの売上にも同じ割引を按分して適用する
+    const discountFactor = 1 - tabDiscountAmount(t.tab_items, t.discount_percent, t.discount_amount) / sub;
+    const taxableSubtotal = tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount);
+    const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+
     const byStaff: Record<string, number> = {};
     t.tab_items.forEach((i) => {
       const key = i.staff_id ?? "unassigned";
       byStaff[key] = (byStaff[key] ?? 0) + itemSubtotal(i) * discountFactor;
     });
+
     Object.entries(byStaff).forEach(([key, exTax]) => {
-      const withTax = exTax * (1 + taxRate);
+      // 実際の会計額（端数切り上げ込み）を、税抜の取り分比率で按分する
+      const shareRatio = taxableSubtotal > 0 ? exTax / taxableSubtotal : 0;
+      const salesWithTax = actualTotal * shareRatio;
       if (!map[key]) {
         const staffId = key === "unassigned" ? null : key;
         map[key] = { staffId, name: staffNameOf(staffId), salesExTax: 0, salesWithTax: 0, commission: 0 };
       }
       map[key].salesExTax += exTax;
-      map[key].salesWithTax += withTax;
-      map[key].commission += withTax * commissionRate;
+      map[key].salesWithTax += salesWithTax;
+      map[key].commission += salesWithTax * commissionRate;
     });
   });
   return Object.values(map).sort((a, b) => b.commission - a.commission);
@@ -196,6 +204,7 @@ export function staffCommissionBreakdown(
 export type DaySummary = {
   subtotal: number;
   tax: number;
+  roundingAdjustment: number;
   total: number;
   laborHourly: number;
   commissionTotal: number;
@@ -220,7 +229,6 @@ export function daySummary(
     0
   );
   const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount), 0);
-  const total = subtotal + tax;
   const laborHourly = dayLaborCost(attendance);
   const commissionTotal = staffCommissionBreakdown(tabs, staffNameOf, taxRate, commissionRate).reduce(
     (a, c) => a + c.commission,
@@ -237,5 +245,21 @@ export function daySummary(
     else if (t.closed_at && t.payment_method === "card") card += tot;
     else unsettled += tot;
   });
-  return { subtotal, tax, total, laborHourly, commissionTotal, labor, expense, profit: subtotal - labor - expense, cash, card, unsettled };
+  // 合計は実際に会計する（100円単位切り上げ後の）金額を必ず使う：現金＋カード＋未会計と一致する
+  const total = cash + card + unsettled;
+  const roundingAdjustment = total - (subtotal + tax);
+  return {
+    subtotal,
+    tax,
+    roundingAdjustment,
+    total,
+    laborHourly,
+    commissionTotal,
+    labor,
+    expense,
+    profit: subtotal - labor - expense,
+    cash,
+    card,
+    unsettled,
+  };
 }

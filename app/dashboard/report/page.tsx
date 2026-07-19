@@ -140,6 +140,7 @@ export default function ReportPage() {
     (a, r) => ({
       subtotal: a.subtotal + r.subtotal,
       tax: a.tax + r.tax,
+      roundingAdjustment: a.roundingAdjustment + r.roundingAdjustment,
       total: a.total + r.total,
       laborHourly: a.laborHourly + r.laborHourly,
       commissionTotal: a.commissionTotal + r.commissionTotal,
@@ -155,6 +156,7 @@ export default function ReportPage() {
     {
       subtotal: 0,
       tax: 0,
+      roundingAdjustment: 0,
       total: 0,
       laborHourly: 0,
       commissionTotal: 0,
