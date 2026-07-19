@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { useBusinessDate } from "@/lib/BusinessDateContext";
@@ -50,14 +51,22 @@ function CourseTimerBadge({ endsAt, now }: { endsAt: string; now: number }) {
 }
 
 export default function POSPage() {
+  return (
+    <Suspense fallback={null}>
+      <POSPageInner />
+    </Suspense>
+  );
+}
+
+function POSPageInner() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const { storeId, taxRate } = useStore();
   const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [activeStaffId, setActiveStaffId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState("");
   const [modalGuestCount, setModalGuestCount] = useState("");
@@ -99,6 +108,14 @@ export default function POSPage() {
     loadData();
     setActiveTabId(null);
   }, [loadData]);
+
+  // 集計タブなどから ?tab=<id> で遷移してきた場合、その伝票を自動で開く
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && tabs.some((t) => t.id === tabParam)) {
+      setActiveTabId(tabParam);
+    }
+  }, [searchParams, tabs]);
 
   // tab_items の連続操作（連打）が競合しないよう、常に最新の状態を同期的に参照するためのref
   const tabsRef = useRef<TabWithItems[]>([]);
@@ -193,12 +210,12 @@ export default function POSPage() {
         business_date: businessDate,
         name: modalName.trim(),
         guest_count: modalGuestCount.trim() === "" ? null : Number(modalGuestCount),
+        staff_id: modalStaffId,
       })
       .select()
       .single();
     if (!error && data) {
       setActiveTabId(data.id);
-      setActiveStaffId(modalStaffId);
       setShowCreateModal(false);
       loadData();
     }
@@ -207,15 +224,12 @@ export default function POSPage() {
   function addMenuItem(item: MenuItem) {
     if (!activeTabId) return;
     const tabId = activeTabId;
-    const staffId = activeStaffId;
 
     enqueue(async () => {
       const tab = tabsRef.current.find((t) => t.id === tabId);
       if (!tab) return;
-      // 同じ品目・同じ担当スタッフの行がすでにあれば数量+1、なければ新規追加
-      const existing = tab.tab_items.find(
-        (i) => i.name === item.name && i.price === item.price && i.source === "menu" && (i.staff_id ?? null) === staffId
-      );
+      // 同じ品目の行がすでにあれば数量+1、なければ新規追加
+      const existing = tab.tab_items.find((i) => i.name === item.name && i.price === item.price && i.source === "menu");
 
       if (existing) {
         const newQty = existing.qty + 1;
@@ -226,7 +240,7 @@ export default function POSPage() {
         const optimisticItem: TabItem = {
           id: tempId,
           tab_id: tabId,
-          staff_id: staffId,
+          staff_id: null,
           name: item.name,
           price: item.price,
           qty: 1,
@@ -236,7 +250,7 @@ export default function POSPage() {
         applyLocalTabItems(tabId, (items) => [...items, optimisticItem]);
         const { data } = await supabase
           .from("tab_items")
-          .insert({ tab_id: tabId, name: item.name, price: item.price, qty: 1, source: "menu", staff_id: staffId })
+          .insert({ tab_id: tabId, name: item.name, price: item.price, qty: 1, source: "menu" })
           .select()
           .single();
         if (data) {
@@ -271,10 +285,15 @@ export default function POSPage() {
       price: Number(manualPrice),
       qty: 1,
       source: "manual",
-      staff_id: activeStaffId,
     });
     setManualName("");
     setManualPrice("");
+    loadData();
+  }
+
+  async function setTabStaff(staffId: string | null) {
+    if (!activeTab) return;
+    await supabase.from("tabs").update({ staff_id: staffId }).eq("id", activeTab.id);
     loadData();
   }
 
@@ -636,14 +655,14 @@ export default function POSPage() {
 
           {staff.length > 0 && (
             <div>
-              <div className="text-gold font-bold text-sm mb-2">担当スタッフ</div>
+              <div className="text-gold font-bold text-sm mb-2">担当スタッフ（この伝票の歩合対象）</div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {staff.map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => setActiveStaffId(activeStaffId === s.id ? null : s.id)}
+                    onClick={() => setTabStaff(activeTab.staff_id === s.id ? null : s.id)}
                     className={`shrink-0 rounded-full px-3 py-2 text-sm border ${
-                      activeStaffId === s.id
+                      activeTab.staff_id === s.id
                         ? "bg-gold text-bg border-gold"
                         : "bg-elevated text-gray-300 border-line"
                     }`}
@@ -653,7 +672,7 @@ export default function POSPage() {
                 ))}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                選択中のスタッフに、これから記録する商品の売上が紐づきます（もう一度タップで解除）
+                この伝票の売上全体が、選択したスタッフの歩合給の対象になります（もう一度タップで解除、会計済みでも変更できます）
               </div>
             </div>
           )}
@@ -723,10 +742,7 @@ export default function POSPage() {
                   <div key={i.id} className="flex items-center gap-3 px-3 py-3">
                     <div className="flex-1 min-w-0">
                       <div className="font-bold truncate">{i.name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        ¥{i.price.toLocaleString()} / 個
-                        {staffName(i.staff_id) && <span> ・👤{staffName(i.staff_id)}</span>}
-                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">¥{i.price.toLocaleString()} / 個</div>
                     </div>
 
                     {!activeTab.closed_at ? (

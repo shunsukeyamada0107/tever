@@ -72,6 +72,7 @@ create table tabs (
   course_ends_at  timestamptz,                          -- 飲み放題等コースの終了予定時刻（任意）
   discount_percent numeric,                             -- 割引率（例: 30 = 30%OFF、任意）
   discount_amount  numeric,                             -- 自由入力の値引き額（円、任意）
+  staff_id        uuid references staff(id) on delete set null, -- この伝票の担当スタッフ（歩合給の対象）
   created_at      timestamptz not null default now(),  -- 来店
   closed_at       timestamptz                          -- 退店・会計
 );

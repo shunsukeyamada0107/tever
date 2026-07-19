@@ -26,6 +26,7 @@ export type Tab = {
   course_ends_at: string | null;
   discount_percent: number | null;
   discount_amount: number | null;
+  staff_id: string | null; // この伝票の担当スタッフ（歩合給の対象）
   created_at: string; // 来店
   closed_at: string | null; // 退店・会計
 };
@@ -153,6 +154,25 @@ export function dayLaborCost(attendance: Attendance[], nowMs = Date.now()) {
   return attendance.reduce((a, att) => a + attHours(att, nowMs) * (att.wage_snapshot ?? 0), 0);
 }
 
+export type HourlyLaborRow = { staffId: string; name: string; hours: number; cost: number };
+
+// 時給が設定されている出退勤記録だけを対象に、スタッフ別の勤務時間・人件費を集計する
+export function hourlyLaborBreakdown(
+  attendance: Attendance[],
+  staffNameOf: (staffId: string | null) => string,
+  nowMs = Date.now()
+): HourlyLaborRow[] {
+  const map: Record<string, HourlyLaborRow> = {};
+  attendance.forEach((a) => {
+    if (a.wage_snapshot == null) return;
+    if (!map[a.staff_id]) map[a.staff_id] = { staffId: a.staff_id, name: staffNameOf(a.staff_id), hours: 0, cost: 0 };
+    const hrs = attHours(a, nowMs);
+    map[a.staff_id].hours += hrs;
+    map[a.staff_id].cost += hrs * a.wage_snapshot;
+  });
+  return Object.values(map).sort((a, b) => b.cost - a.cost);
+}
+
 export type StaffCommission = {
   staffId: string | null;
   name: string;
@@ -161,8 +181,8 @@ export type StaffCommission = {
   commission: number;
 };
 
-// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）のうち、
-// そのスタッフが記録した分を按分して歩合率をかける（切り上げ分もスタッフの取り分に含まれる）
+// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）に対して、
+// その伝票の担当スタッフ（tabs.staff_id）1人に歩合率をかける（品目ごとではなく伝票単位）
 export function staffCommissionBreakdown(
   tabs: TabWithItems[],
   staffNameOf: (staffId: string | null) => string,
@@ -172,31 +192,18 @@ export function staffCommissionBreakdown(
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
     if (!t.closed_at) return;
-    const sub = tabSubtotal(t.tab_items);
-    if (sub <= 0) return;
-    // 伝票に割引がある場合、各スタッフの売上にも同じ割引を按分して適用する
-    const discountFactor = 1 - tabDiscountAmount(t.tab_items, t.discount_percent, t.discount_amount) / sub;
+    // 担当スタッフが未設定の伝票は店舗の客として扱い、歩合の対象にしない
+    if (!t.staff_id) return;
+    const key = t.staff_id;
     const taxableSubtotal = tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount);
     const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
 
-    const byStaff: Record<string, number> = {};
-    t.tab_items.forEach((i) => {
-      const key = i.staff_id ?? "unassigned";
-      byStaff[key] = (byStaff[key] ?? 0) + itemSubtotal(i) * discountFactor;
-    });
-
-    Object.entries(byStaff).forEach(([key, exTax]) => {
-      // 実際の会計額（端数切り上げ込み）を、税抜の取り分比率で按分する
-      const shareRatio = taxableSubtotal > 0 ? exTax / taxableSubtotal : 0;
-      const salesWithTax = actualTotal * shareRatio;
-      if (!map[key]) {
-        const staffId = key === "unassigned" ? null : key;
-        map[key] = { staffId, name: staffNameOf(staffId), salesExTax: 0, salesWithTax: 0, commission: 0 };
-      }
-      map[key].salesExTax += exTax;
-      map[key].salesWithTax += salesWithTax;
-      map[key].commission += salesWithTax * commissionRate;
-    });
+    if (!map[key]) {
+      map[key] = { staffId: key, name: staffNameOf(key), salesExTax: 0, salesWithTax: 0, commission: 0 };
+    }
+    map[key].salesExTax += taxableSubtotal;
+    map[key].salesWithTax += actualTotal;
+    map[key].commission += actualTotal * commissionRate;
   });
   return Object.values(map).sort((a, b) => b.commission - a.commission);
 }
