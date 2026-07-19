@@ -8,6 +8,7 @@ import { DateBar } from "@/lib/DateBar";
 import {
   MenuItem,
   Staff,
+  TabItem,
   TabWithItems,
   tabColorFor,
   tabDiscountAmount,
@@ -99,6 +100,42 @@ export default function POSPage() {
     setActiveTabId(null);
   }, [loadData]);
 
+  // tab_items の連続操作（連打）が競合しないよう、常に最新の状態を同期的に参照するためのref
+  const tabsRef = useRef<TabWithItems[]>([]);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
+  // 書き込み系の操作を1件ずつ順番に実行するためのキュー
+  const writeQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  function enqueue(fn: () => Promise<void>) {
+    const run = writeQueueRef.current.then(fn, fn);
+    writeQueueRef.current = run.catch(() => {});
+    return run;
+  }
+
+  function applyLocalTabItems(tabId: string, updater: (items: TabItem[]) => TabItem[]) {
+    const updated = tabsRef.current.map((t) => (t.id === tabId ? { ...t, tab_items: updater(t.tab_items) } : t));
+    tabsRef.current = updated;
+    setTabs(updated);
+  }
+
+  function findLocalItem(tabId: string, snapshot: TabItem) {
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    if (!tab) return null;
+    return (
+      tab.tab_items.find((i) => i.id === snapshot.id) ??
+      tab.tab_items.find(
+        (i) =>
+          i.name === snapshot.name &&
+          i.price === snapshot.price &&
+          i.staff_id === snapshot.staff_id &&
+          i.source === snapshot.source
+      ) ??
+      null
+    );
+  }
+
   useEffect(() => {
     if (typeof Notification !== "undefined") setNotifyPermission(Notification.permission);
   }, []);
@@ -167,35 +204,54 @@ export default function POSPage() {
     }
   }
 
-  async function addMenuItem(item: MenuItem) {
-    if (!activeTab) return;
-    // 同じ品目・同じ担当スタッフの行がすでにあれば数量+1、なければ新規追加
-    const existing = activeTab.tab_items.find(
-      (i) =>
-        i.name === item.name &&
-        i.price === item.price &&
-        i.source === "menu" &&
-        (i.staff_id ?? null) === activeStaffId
-    );
-    if (existing) {
-      await supabase.from("tab_items").update({ qty: existing.qty + 1 }).eq("id", existing.id);
-    } else {
-      await supabase.from("tab_items").insert({
-        tab_id: activeTab.id,
-        name: item.name,
-        price: item.price,
-        qty: 1,
-        source: "menu",
-        staff_id: activeStaffId,
-      });
-    }
-    // 飲み放題等のコースメニューなら、伝票にタイマーをセット（起点はタップ時点から）
-    if (item.course_minutes) {
-      const endsAt = new Date(Date.now() + item.course_minutes * 60000).toISOString();
-      await supabase.from("tabs").update({ course_ends_at: endsAt }).eq("id", activeTab.id);
-      notifiedRef.current.delete(activeTab.id);
-    }
-    loadData();
+  function addMenuItem(item: MenuItem) {
+    if (!activeTabId) return;
+    const tabId = activeTabId;
+    const staffId = activeStaffId;
+
+    enqueue(async () => {
+      const tab = tabsRef.current.find((t) => t.id === tabId);
+      if (!tab) return;
+      // 同じ品目・同じ担当スタッフの行がすでにあれば数量+1、なければ新規追加
+      const existing = tab.tab_items.find(
+        (i) => i.name === item.name && i.price === item.price && i.source === "menu" && (i.staff_id ?? null) === staffId
+      );
+
+      if (existing) {
+        const newQty = existing.qty + 1;
+        applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === existing.id ? { ...i, qty: newQty } : i)));
+        await supabase.from("tab_items").update({ qty: newQty }).eq("id", existing.id);
+      } else {
+        const tempId = `temp-${Math.random().toString(36).slice(2)}`;
+        const optimisticItem: TabItem = {
+          id: tempId,
+          tab_id: tabId,
+          staff_id: staffId,
+          name: item.name,
+          price: item.price,
+          qty: 1,
+          source: "menu",
+          created_at: new Date().toISOString(),
+        };
+        applyLocalTabItems(tabId, (items) => [...items, optimisticItem]);
+        const { data } = await supabase
+          .from("tab_items")
+          .insert({ tab_id: tabId, name: item.name, price: item.price, qty: 1, source: "menu", staff_id: staffId })
+          .select()
+          .single();
+        if (data) {
+          applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === tempId ? (data as TabItem) : i)));
+        }
+      }
+
+      // 飲み放題等のコースメニューなら、伝票にタイマーをセット（起点はタップ時点から）
+      if (item.course_minutes) {
+        const endsAt = new Date(Date.now() + item.course_minutes * 60000).toISOString();
+        await supabase.from("tabs").update({ course_ends_at: endsAt }).eq("id", tabId);
+        notifiedRef.current.delete(tabId);
+      }
+      loadData();
+    });
   }
 
   async function saveGuestCount(count: string) {
@@ -222,19 +278,38 @@ export default function POSPage() {
     loadData();
   }
 
-  async function deleteTabItem(id: string) {
-    await supabase.from("tab_items").delete().eq("id", id);
-    loadData();
+  function deleteTabItem(item: TabItem) {
+    if (!activeTabId) return;
+    const tabId = activeTabId;
+    enqueue(async () => {
+      const current = findLocalItem(tabId, item);
+      if (!current) return;
+      applyLocalTabItems(tabId, (items) => items.filter((i) => i.id !== current.id));
+      if (!current.id.startsWith("temp-")) {
+        await supabase.from("tab_items").delete().eq("id", current.id);
+      }
+      loadData();
+    });
   }
 
-  async function changeQty(item: TabWithItems["tab_items"][number], delta: number) {
-    const qty = item.qty + delta;
+  function setQty(item: TabItem, qty: number) {
+    if (!activeTabId) return;
     if (qty <= 0) {
-      await deleteTabItem(item.id);
+      deleteTabItem(item);
       return;
     }
-    await supabase.from("tab_items").update({ qty }).eq("id", item.id);
-    loadData();
+    const tabId = activeTabId;
+    enqueue(async () => {
+      const current = findLocalItem(tabId, item);
+      if (!current) return;
+      applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === current.id ? { ...i, qty } : i)));
+      await supabase.from("tab_items").update({ qty }).eq("id", current.id);
+      loadData();
+    });
+  }
+
+  function changeQty(item: TabItem, delta: number) {
+    setQty(item, item.qty + delta);
   }
 
   async function saveMemo() {
@@ -662,7 +737,16 @@ export default function POSPage() {
                         >
                           −
                         </button>
-                        <span className="w-6 text-center font-mono">{i.qty}</span>
+                        <input
+                          key={`${i.id}-${i.qty}`}
+                          defaultValue={i.qty}
+                          onBlur={(e) => {
+                            const n = Number(e.target.value);
+                            if (Number.isFinite(n)) setQty(i, Math.floor(n));
+                          }}
+                          inputMode="numeric"
+                          className="w-10 text-center font-mono bg-bg2 border border-line rounded-md py-1"
+                        />
                         <button
                           onClick={() => changeQty(i, 1)}
                           className="w-8 h-8 rounded-lg border border-line text-gray-300 text-lg leading-none"
@@ -680,7 +764,7 @@ export default function POSPage() {
 
                     {!activeTab.closed_at && (
                       <button
-                        onClick={() => deleteTabItem(i.id)}
+                        onClick={() => deleteTabItem(i)}
                         className="text-rose text-lg shrink-0 w-6"
                       >
                         ✕
