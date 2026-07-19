@@ -49,7 +49,11 @@ export default function ReportPage() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [monthRows, setMonthRows] = useState<DayRow[]>([]);
+  const [monthTabsRaw, setMonthTabsRaw] = useState<TabWithItems[]>([]);
+  const [monthAttRaw, setMonthAttRaw] = useState<Attendance[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [copyLabel, setCopyLabel] = useState("コピーする");
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -120,6 +124,8 @@ export default function ReportPage() {
         return { date, tabCount, guestCount, ...daySummary(dTabs, dAtt, dExp, staffNameOf, taxRate, commissionRate) };
       });
     setMonthRows(rows);
+    setMonthTabsRaw((monthTabs as TabWithItems[]) ?? []);
+    setMonthAttRaw((monthAtt as Attendance[]) ?? []);
   }, [storeId, businessDate, monthStart, monthEnd, taxRate, commissionRate]);
 
   useEffect(() => {
@@ -174,6 +180,86 @@ export default function ReportPage() {
       guestCount: 0,
     }
   );
+
+  function buildReportText() {
+    const [, m, d] = businessDate.split("-").map(Number);
+    const [, monM] = monthStart.split("-").map(Number);
+
+    const coupon50Today = tabRows.filter((t) => t.discount_percent === 50).length;
+    const coupon50Month = monthTabsRaw.filter((t) => t.discount_percent === 50).length;
+
+    const monthCommission = staffCommissionBreakdown(monthTabsRaw, staffName, taxRate, commissionRate);
+    const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
+    const monthUnsettled = monthTabsRaw.filter((t) => !t.closed_at);
+
+    const dailyLines = [
+      `⚪日にち ${m}/${d}`,
+      `⚪売上 ${yen(summary.total)}`,
+      `⚪経費 ${yen(summary.expense)}`,
+      `⚪純利益${yen(summary.total - summary.expense)}`,
+      `⚪カード ${yen(summary.card)}`,
+      `⚪${tabRows.length}組男　人女　人（計${tabs.reduce((a, t) => a + (t.guest_count ?? 0), 0)}人）`,
+      `⚪メンション　件フォロー　件写真　件`,
+      `⚪ｸｰﾎﾟﾝ金　枚 銀　枚`,
+      `⚪ｸｰﾎﾟﾝ返ってきた枚数金　枚銀　枚`,
+      `50%OFFクーポン ${coupon50Today}枚`,
+      ``,
+      `⚪バイト時間`,
+      ...(hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${h.hours.toFixed(1)}h`) : ["　"]),
+      `⚪バイト人件費`,
+      ...(hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${yen(h.cost)}`) : ["　"]),
+      ``,
+      `⚪バック`,
+      ...(commission.length > 0
+        ? commission.map((c) => `${c.name} ${yen(c.commission)}（${yen(c.salesWithTax)}）`)
+        : ["　"]),
+    ];
+
+    const monthlyLines = [
+      `日にち ${monM}/1〜${m}/${d}`,
+      `⚪売上 ${yen(monthTotal.total)}`,
+      `⚪経費　${yen(monthTotal.expense)}`,
+      `⚪純利益  ${yen(monthTotal.total - monthTotal.expense)}`,
+      `⚪家賃　¥`,
+      `⚪カラオケ¥`,
+      `⚪カード ${yen(monthTotal.card)}`,
+      `⚪PayPay¥`,
+      `⚪${monthTotal.tabCount}組計${monthTotal.guestCount}人`,
+      `⚪ｸｰﾎﾟﾝ金　枚銀　枚`,
+      `⚪ｸｰﾎﾟﾝ返ってきた枚数金　枚銀　枚`,
+      `50%OFFクーポン ${coupon50Month}枚`,
+      ``,
+      `⚪バイト時間&人件費`,
+      ...(monthHourlyLabor.length > 0
+        ? monthHourlyLabor.map((h) => `${h.name}  ${h.hours.toFixed(1)}h${yen(h.cost)}`)
+        : ["　"]),
+      ``,
+      `⚪バック`,
+      ...(monthCommission.length > 0
+        ? monthCommission.map((c) => `${c.name}${yen(c.commission)}（${yen(c.salesWithTax)}）`)
+        : ["　"]),
+      ``,
+      `${m}月未収`,
+      ...(monthUnsettled.length > 0
+        ? monthUnsettled.map(
+            (t) => `${t.name}${yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}`
+          )
+        : ["　"]),
+    ];
+
+    return `${dailyLines.join("\n")}\n\n\n${monthlyLines.join("\n")}`;
+  }
+
+  async function copyReportText() {
+    try {
+      await navigator.clipboard.writeText(buildReportText());
+      setCopyLabel("コピーしました！");
+      setTimeout(() => setCopyLabel("コピーする"), 2000);
+    } catch {
+      setCopyLabel("コピーできませんでした");
+      setTimeout(() => setCopyLabel("コピーする"), 2000);
+    }
+  }
 
   async function exportExcel() {
     setExporting(true);
@@ -415,6 +501,50 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+
+      <button
+        onClick={() => setShowReportModal(true)}
+        className="w-full rounded-full bg-gradient-to-r from-rose to-gold text-white py-4 text-lg font-bold shadow-lg active:scale-95 transition-transform"
+        style={{ fontFamily: "'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', sans-serif" }}
+      >
+        報告レポート
+      </button>
+
+      {showReportModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setShowReportModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md max-h-[85vh] flex flex-col rounded-xl border border-line bg-elevated p-4 space-y-3"
+          >
+            <div className="text-gold font-bold text-base">LINE報告用レポート</div>
+            <textarea
+              readOnly
+              value={buildReportText()}
+              className="flex-1 min-h-[300px] rounded-md bg-bg2 border border-line px-3 py-2 text-xs font-mono whitespace-pre-wrap"
+            />
+            <div className="text-xs text-gray-500">
+              ⚪の付いた男女人数・メンション等・クーポン色・家賃・カラオケ・PayPayは自動集計できないため空欄です。コピー後に手入力してください。
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+              >
+                閉じる
+              </button>
+              <button
+                onClick={copyReportText}
+                className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold"
+              >
+                {copyLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
