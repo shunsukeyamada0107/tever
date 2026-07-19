@@ -96,12 +96,18 @@ export function tabTax(
   return Math.round(tabTaxableSubtotal(items, discountPercent) * taxRate);
 }
 
+// 会計時の端数は100円単位で切り上げる（例: 1120円→1200円）
+export function roundUpTo100(n: number) {
+  return Math.ceil(n / 100) * 100;
+}
+
 export function tabTotal(
   items: TabItem[],
   taxRate: number = DEFAULT_TAX_RATE,
   discountPercent: number | null | undefined = null
 ) {
-  return tabTaxableSubtotal(items, discountPercent) + tabTax(items, taxRate, discountPercent);
+  const raw = tabTaxableSubtotal(items, discountPercent) + tabTax(items, taxRate, discountPercent);
+  return roundUpTo100(raw);
 }
 
 // 伝票ごとに見分けやすいよう、IDから決定的に色を割り当てる
