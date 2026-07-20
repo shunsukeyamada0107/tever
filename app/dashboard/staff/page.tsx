@@ -9,7 +9,7 @@ import { Staff, Attendance, TabWithItems, attHours, staffCommissionBreakdown } f
 
 export default function StaffPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour } = useStore();
   const { date: businessDate, isToday } = useBusinessDate();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -18,6 +18,8 @@ export default function StaffPage() {
   const [newWage, setNewWage] = useState("");
   const [now, setNow] = useState(Date.now());
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
+  const [manualHoursStaffId, setManualHoursStaffId] = useState("");
+  const [manualHours, setManualHours] = useState("");
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -97,6 +99,30 @@ export default function StaffPage() {
     loadData();
   }
 
+  async function addManualAttendance() {
+    if (!storeId || !manualHoursStaffId || !manualHours.trim()) return;
+    const s = staff.find((x) => x.id === manualHoursStaffId);
+    if (!s) return;
+    const hrs = Number(manualHours);
+    if (!Number.isFinite(hrs) || hrs <= 0) return;
+
+    const clockIn = new Date(`${businessDate}T00:00:00`);
+    clockIn.setHours(cutoffHour, 0, 0, 0);
+    const clockOut = new Date(clockIn.getTime() + hrs * 3600000);
+
+    await supabase.from("attendance").insert({
+      store_id: storeId,
+      staff_id: s.id,
+      business_date: businessDate,
+      clock_in: clockIn.toISOString(),
+      clock_out: clockOut.toISOString(),
+      wage_snapshot: s.hourly_wage,
+    });
+    setManualHoursStaffId("");
+    setManualHours("");
+    loadData();
+  }
+
   async function saveWage(staffId: string) {
     const raw = wageDrafts[staffId] ?? "";
     const wage = raw.trim() === "" ? null : Number(raw);
@@ -149,23 +175,26 @@ export default function StaffPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold">{s.name}</div>
-                  <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
-                    時給
-                    <input
-                      value={wageDrafts[s.id] ?? ""}
-                      onChange={(e) => setWageDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
-                      placeholder="未設定"
-                      inputMode="numeric"
-                      className="w-16 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs"
-                    />
-                    円・歩合{Math.round(commissionRate * 100)}%
-                    <button
-                      onClick={() => saveWage(s.id)}
-                      disabled={(wageDrafts[s.id] ?? "") === (s.hourly_wage != null ? String(s.hourly_wage) : "")}
-                      className="rounded-md border border-line px-1.5 py-0.5 text-gray-300 disabled:opacity-30"
-                    >
-                      保存
-                    </button>
+                  <div className="mt-1.5">
+                    <label className="block text-xs text-gray-500 mb-1">
+                      時給（円）・歩合{Math.round(commissionRate * 100)}%
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={wageDrafts[s.id] ?? ""}
+                        onChange={(e) => setWageDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
+                        placeholder="未設定"
+                        inputMode="numeric"
+                        className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={() => saveWage(s.id)}
+                        disabled={(wageDrafts[s.id] ?? "") === (s.hourly_wage != null ? String(s.hourly_wage) : "")}
+                        className="rounded-md bg-gold text-bg px-3 py-2 text-xs font-bold disabled:opacity-30 shrink-0"
+                      >
+                        保存
+                      </button>
+                    </div>
                   </div>
                   {open && (
                     <div className="text-xs text-gold mt-0.5">
@@ -225,6 +254,42 @@ export default function StaffPage() {
 
       <div>
         <div className="text-gold font-bold text-sm mb-2">{isToday ? "本日" : businessDate}の勤怠記録</div>
+
+        {staff.some((s) => s.hourly_wage != null) && (
+          <div className="mb-3 rounded-xl border border-dashed border-line p-3 space-y-2">
+            <div className="text-xs text-gray-400">手入力で勤務時間を追加（時給設定スタッフのみ）</div>
+            <div className="flex gap-2">
+              <select
+                value={manualHoursStaffId}
+                onChange={(e) => setManualHoursStaffId(e.target.value)}
+                className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+              >
+                <option value="">スタッフを選択</option>
+                {staff
+                  .filter((s) => s.hourly_wage != null)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+              <input
+                value={manualHours}
+                onChange={(e) => setManualHours(e.target.value)}
+                placeholder="時間"
+                inputMode="decimal"
+                className="w-20 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+              />
+              <button
+                onClick={addManualAttendance}
+                className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
+              >
+                ＋ 追加
+              </button>
+            </div>
+          </div>
+        )}
+
         {attendance.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             まだ記録がありません

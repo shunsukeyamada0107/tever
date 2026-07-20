@@ -114,6 +114,7 @@ create table expenses (
   category       text not null,
   name           text not null,
   amount         numeric not null check (amount >= 0),
+  receipt_url    text,          -- 撮影したレシート画像のURL（任意）
   created_at     timestamptz not null default now()
 );
 
@@ -170,6 +171,22 @@ create policy "store members can access their attendance"
 
 create policy "store members can access their expenses"
   on expenses for all using (store_id in (select my_store_ids()));
+
+-- ============================================================
+-- Storage（レシート画像の保存先）
+-- receiptsバケットを作成し、ログイン済みユーザーのアップロードを許可する
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('receipts', 'receipts', true)
+on conflict (id) do nothing;
+
+create policy "authenticated users can upload receipts"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'receipts');
+
+create policy "authenticated users can delete their receipts"
+  on storage.objects for delete to authenticated
+  using (bucket_id = 'receipts');
 
 -- ============================================================
 -- 初期データ：TEVERを1店舗目として登録

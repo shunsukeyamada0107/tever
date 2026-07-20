@@ -20,6 +20,7 @@ import {
   hourlyLaborBreakdown,
 } from "@/lib/types";
 import { generateInsights } from "@/lib/insights";
+import { MonthlySalesChart, ChartPoint } from "@/lib/MonthlySalesChart";
 
 type DayRow = { date: string; tabCount: number; guestCount: number } & DaySummary;
 
@@ -51,9 +52,14 @@ export default function ReportPage() {
   const [monthRows, setMonthRows] = useState<DayRow[]>([]);
   const [monthTabsRaw, setMonthTabsRaw] = useState<TabWithItems[]>([]);
   const [monthAttRaw, setMonthAttRaw] = useState<Attendance[]>([]);
+  const [monthExpRaw, setMonthExpRaw] = useState<Expense[]>([]);
   const [exporting, setExporting] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [copyLabel, setCopyLabel] = useState("コピーする");
+  const [showChart, setShowChart] = useState(false);
+  const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
+  const [showCostChart, setShowCostChart] = useState(false);
+  const [selectedCostDate, setSelectedCostDate] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -126,6 +132,7 @@ export default function ReportPage() {
     setMonthRows(rows);
     setMonthTabsRaw((monthTabs as TabWithItems[]) ?? []);
     setMonthAttRaw((monthAtt as Attendance[]) ?? []);
+    setMonthExpRaw((monthExp as Expense[]) ?? []);
   }, [storeId, businessDate, monthStart, monthEnd, taxRate, commissionRate]);
 
   useEffect(() => {
@@ -180,6 +187,38 @@ export default function ReportPage() {
       guestCount: 0,
     }
   );
+
+  // 月間売上グラフ用：その月の1日〜末日まで欠けなく並べる（記録が無い日は0）
+  function buildChartSeries(): ChartPoint[] {
+    const [monthYear, monthNum] = monthStart.split("-").map(Number);
+    const daysInMonth = new Date(monthYear, monthNum, 0).getDate();
+    const rowByDate = new Map(monthRows.map((r) => [r.date, r]));
+    const series: ChartPoint[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
+      series.push({ day, date, total: rowByDate.get(date)?.total ?? 0 });
+    }
+    return series;
+  }
+  const chartSeries = buildChartSeries();
+  const selectedChartRow = selectedChartDate ? monthRows.find((r) => r.date === selectedChartDate) : null;
+
+  // 原価（経費）グラフ用：日ごとの経費合計
+  function buildCostSeries(): ChartPoint[] {
+    const [monthYear, monthNum] = monthStart.split("-").map(Number);
+    const daysInMonth = new Date(monthYear, monthNum, 0).getDate();
+    const rowByDate = new Map(monthRows.map((r) => [r.date, r]));
+    const series: ChartPoint[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
+      series.push({ day, date, total: rowByDate.get(date)?.expense ?? 0 });
+    }
+    return series;
+  }
+  const costSeries = buildCostSeries();
+  const selectedCostReceipts = selectedCostDate
+    ? monthExpRaw.filter((e) => e.business_date === selectedCostDate && e.receipt_url)
+    : [];
 
   function buildReportText() {
     const [, m, d] = businessDate.split("-").map(Number);
@@ -484,6 +523,71 @@ export default function ReportPage() {
           <span className="text-gray-300 font-bold">粗利合計</span>
           <span className="text-right text-gold font-bold">{yen(monthTotal.profit)}</span>
         </div>
+
+        <button
+          onClick={() => setShowChart((v) => !v)}
+          className="w-full rounded-md border border-dashed border-gold text-gold py-2 text-sm font-bold mb-2"
+        >
+          {showChart ? "売上グラフを閉じる" : "月間売上グラフを見る"}
+        </button>
+
+        {showChart && (
+          <div className="rounded-xl border border-line bg-elevated p-3 mb-2">
+            <MonthlySalesChart series={chartSeries} onSelectDate={setSelectedChartDate} />
+            {selectedChartDate && (
+              <div className="mt-3 pt-3 border-t border-dashed border-line">
+                {selectedChartRow ? (
+                  <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
+                    <span className="text-gray-400">小計(税抜)</span>
+                    <span className="text-right">{yen(selectedChartRow.subtotal)}</span>
+                    <span className="text-gray-400">歩合給</span>
+                    <span className="text-right">{yen(selectedChartRow.commissionTotal)}</span>
+                    <span className="text-gray-400">経費</span>
+                    <span className="text-right">{yen(selectedChartRow.expense)}</span>
+                    <span className="text-gray-300 font-bold">粗利</span>
+                    <span className="text-right text-gold font-bold">{yen(selectedChartRow.profit)}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 text-center">この日の記録はありません</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowCostChart((v) => !v)}
+          className="w-full rounded-md border border-dashed border-rose text-rose py-2 text-sm font-bold mb-2"
+        >
+          {showCostChart ? "原価グラフを閉じる" : "原価グラフを見る"}
+        </button>
+
+        {showCostChart && (
+          <div className="rounded-xl border border-line bg-elevated p-3 mb-2">
+            <MonthlySalesChart series={costSeries} onSelectDate={setSelectedCostDate} />
+            {selectedCostDate && (
+              <div className="mt-3 pt-3 border-t border-dashed border-line">
+                <div className="text-xs text-gray-400 mb-2">{selectedCostDate}のレシート</div>
+                {selectedCostReceipts.length === 0 ? (
+                  <div className="text-xs text-gray-500 text-center">この日に添付されたレシート写真はありません</div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {selectedCostReceipts.map((e) => (
+                      <a key={e.id} href={e.receipt_url!} target="_blank" rel="noreferrer">
+                        <img
+                          src={e.receipt_url!}
+                          alt={e.name}
+                          className="w-full aspect-square object-cover rounded-md border border-line"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {monthRows.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             今月の記録はまだありません

@@ -61,10 +61,11 @@ export type Expense = {
   category: string;
   name: string;
   amount: number;
+  receipt_url: string | null;
   created_at: string;
 };
 
-export const EXPENSE_CATEGORIES = ["仕入れ", "消耗品", "ドリンク", "雑費", "その他"];
+export const EXPENSE_CATEGORIES = ["仕入れ", "消耗品", "雑費", "その他"];
 
 // 店舗設定が未取得の場合のフォールバック値
 export const DEFAULT_TAX_RATE = 0.10;
