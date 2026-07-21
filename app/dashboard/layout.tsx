@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { StoreProvider, useStore } from "@/lib/StoreContext";
 import { BusinessDateProvider } from "@/lib/BusinessDateContext";
+import { createClient } from "@/lib/supabaseClient";
 
 const TABS = [
   { href: "/dashboard", label: "営業" },
@@ -14,12 +15,23 @@ const TABS = [
 ];
 
 function HeaderBar() {
+  const router = useRouter();
+  const supabase = createClient();
   const { storeName, loading } = useStore();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
   return (
-    <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3">
+    <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3 flex items-center justify-between">
       <div className="text-gold font-bold text-sm tracking-wide">
         {loading ? "読み込み中..." : storeName ?? "店舗未設定"}
       </div>
+      <button onClick={handleLogout} className="text-xs text-gray-400 border border-line rounded-md px-2 py-1">
+        ログアウト
+      </button>
     </div>
   );
 }
