@@ -182,8 +182,9 @@ export type StaffCommission = {
   commission: number;
 };
 
-// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）に対して、
-// その伝票の担当スタッフ（tabs.staff_id）1人に歩合率をかける（品目ごとではなく伝票単位）
+// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）を、
+// 品目ごとの担当（tab_items.staff_id で個別指定があればそれ、無ければ伝票の担当 tabs.staff_id）で按分する。
+// 例: 伝票の担当はAさんだが、シャンパンだけBさんに個別指定した場合、シャンパン分だけBさんの歩合になる。
 export function staffCommissionBreakdown(
   tabs: TabWithItems[],
   staffNameOf: (staffId: string | null) => string,
@@ -193,18 +194,33 @@ export function staffCommissionBreakdown(
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
     if (!t.closed_at) return;
-    // 担当スタッフが未設定の伝票は店舗の客として扱い、歩合の対象にしない
-    if (!t.staff_id) return;
-    const key = t.staff_id;
+    const sub = tabSubtotal(t.tab_items);
+    if (sub <= 0) return;
+
     const taxableSubtotal = tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount);
     const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+    const discountFactor = taxableSubtotal / sub;
 
-    if (!map[key]) {
-      map[key] = { staffId: key, name: staffNameOf(key), salesExTax: 0, salesWithTax: 0, commission: 0 };
-    }
-    map[key].salesExTax += taxableSubtotal;
-    map[key].salesWithTax += actualTotal;
-    map[key].commission += actualTotal * commissionRate;
+    // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定なら店舗の客扱いで対象外）
+    const byStaff: Record<string, number> = {};
+    t.tab_items.forEach((i) => {
+      const effectiveStaffId = i.staff_id ?? t.staff_id;
+      if (!effectiveStaffId) return;
+      byStaff[effectiveStaffId] = (byStaff[effectiveStaffId] ?? 0) + itemSubtotal(i);
+    });
+
+    Object.entries(byStaff).forEach(([key, rawSub]) => {
+      const discountedSub = rawSub * discountFactor;
+      const shareRatio = taxableSubtotal > 0 ? discountedSub / taxableSubtotal : 0;
+      const salesWithTax = actualTotal * shareRatio;
+
+      if (!map[key]) {
+        map[key] = { staffId: key, name: staffNameOf(key), salesExTax: 0, salesWithTax: 0, commission: 0 };
+      }
+      map[key].salesExTax += discountedSub;
+      map[key].salesWithTax += salesWithTax;
+      map[key].commission += salesWithTax * commissionRate;
+    });
   });
   return Object.values(map).sort((a, b) => b.commission - a.commission);
 }

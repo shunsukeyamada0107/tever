@@ -31,7 +31,7 @@ export default function LoginPage() {
         onSubmit={handleLogin}
         className="w-full max-w-sm bg-bg2 border border-line rounded-xl p-6 space-y-4"
       >
-        <h1 className="text-gold text-lg font-bold">BAR TEVER ログイン</h1>
+        <h1 className="text-gold text-lg font-bold">Your Manager ログイン</h1>
         <div>
           <label className="block text-xs text-gray-400 mb-1">メールアドレス</label>
           <input

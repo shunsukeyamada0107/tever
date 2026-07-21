@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "BAR TEVER",
+  title: "Your Manager",
   description: "夜の会計・売上管理アプリ",
 };
 

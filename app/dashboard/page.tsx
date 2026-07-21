@@ -311,6 +311,20 @@ function POSPageInner() {
     });
   }
 
+  function setItemStaff(item: TabItem, staffId: string | null) {
+    if (!activeTabId) return;
+    const tabId = activeTabId;
+    enqueue(async () => {
+      const current = findLocalItem(tabId, item);
+      if (!current) return;
+      applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === current.id ? { ...i, staff_id: staffId } : i)));
+      if (!current.id.startsWith("temp-")) {
+        await supabase.from("tab_items").update({ staff_id: staffId }).eq("id", current.id);
+      }
+      loadData();
+    });
+  }
+
   function setQty(item: TabItem, qty: number) {
     if (!activeTabId) return;
     if (qty <= 0) {
@@ -743,6 +757,27 @@ function POSPageInner() {
                     <div className="flex-1 min-w-0">
                       <div className="font-bold truncate">{i.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">¥{i.price.toLocaleString()} / 個</div>
+                      {staff.length > 0 &&
+                        (!activeTab.closed_at ? (
+                          <select
+                            value={i.staff_id ?? ""}
+                            onChange={(e) => setItemStaff(i, e.target.value || null)}
+                            className="mt-1 text-xs rounded-md bg-bg2 border border-line px-1.5 py-0.5 max-w-full"
+                          >
+                            <option value="">
+                              伝票の担当のまま{activeTab.staff_id ? `（${staffName(activeTab.staff_id)}）` : "（未設定）"}
+                            </option>
+                            {staff.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                この商品だけ→{s.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          i.staff_id && (
+                            <div className="text-xs text-gold mt-0.5">👤{staffName(i.staff_id)}（個別指定）</div>
+                          )
+                        ))}
                     </div>
 
                     {!activeTab.closed_at ? (
