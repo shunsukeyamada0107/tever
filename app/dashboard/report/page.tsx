@@ -47,7 +47,8 @@ function pctChange(now: number, prev: number): number | null {
 export default function ReportPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { storeId, storeName, taxRate, commissionRate, reportTemplate, cashFloatAmount } = useStore();
+  const { storeId, storeName, taxRate, commissionRate, reportTemplate, cashFloatAmount, commissionScheme, drinkBackAmount } =
+    useStore();
   const { date: businessDate } = useBusinessDate();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
   const prevMonthAnchor = new Date(`${monthStart}T12:00:00`);
@@ -162,7 +163,12 @@ export default function ReportPage() {
         const dExp = ((monthExp ?? []) as Expense[]).filter((e) => e.business_date === date);
         const tabCount = dTabs.length;
         const guestCount = dTabs.reduce((a, t) => a + (t.guest_count ?? 0), 0);
-        return { date, tabCount, guestCount, ...daySummary(dTabs, dAtt, dExp, staffNameOf, taxRate, commissionRate) };
+        return {
+          date,
+          tabCount,
+          guestCount,
+          ...daySummary(dTabs, dAtt, dExp, staffNameOf, taxRate, commissionRate, commissionScheme, drinkBackAmount),
+        };
       });
     setMonthRows(rows);
     setMonthTabsRaw((monthTabs as TabWithItems[]) ?? []);
@@ -175,10 +181,23 @@ export default function ReportPage() {
         (prevExp as Expense[]) ?? [],
         staffNameOf,
         taxRate,
-        commissionRate
+        commissionRate,
+        commissionScheme,
+        drinkBackAmount
       )
     );
-  }, [storeId, businessDate, monthStart, monthEnd, prevMonthStart, prevMonthEnd, taxRate, commissionRate]);
+  }, [
+    storeId,
+    businessDate,
+    monthStart,
+    monthEnd,
+    prevMonthStart,
+    prevMonthEnd,
+    taxRate,
+    commissionRate,
+    commissionScheme,
+    drinkBackAmount,
+  ]);
 
   useEffect(() => {
     loadData();
@@ -190,8 +209,8 @@ export default function ReportPage() {
     return s ? s.name : "(元スタッフ)";
   }
 
-  const summary = daySummary(tabs, attendance, expenses, staffName, taxRate, commissionRate);
-  const commission = staffCommissionBreakdown(tabs, staffName, taxRate, commissionRate);
+  const summary = daySummary(tabs, attendance, expenses, staffName, taxRate, commissionRate, commissionScheme, drinkBackAmount);
+  const commission = staffCommissionBreakdown(tabs, staffName, taxRate, commissionRate, commissionScheme, drinkBackAmount);
   const hourlyLabor = hourlyLaborBreakdown(attendance, staffName);
   const tabRows = [...tabs].sort(
     (a, b) => Number(!!a.closed_at) - Number(!!b.closed_at) || tabSubtotal(b.tab_items) - tabSubtotal(a.tab_items)
@@ -272,7 +291,14 @@ export default function ReportPage() {
     const coupon50Today = tabRows.filter((t) => t.discount_percent === 50).length;
     const coupon50Month = monthTabsRaw.filter((t) => t.discount_percent === 50).length;
 
-    const monthCommission = staffCommissionBreakdown(monthTabsRaw, staffName, taxRate, commissionRate);
+    const monthCommission = staffCommissionBreakdown(
+      monthTabsRaw,
+      staffName,
+      taxRate,
+      commissionRate,
+      commissionScheme,
+      drinkBackAmount
+    );
     const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
     const monthUnsettled = monthTabsRaw.filter((t) => !t.closed_at);
 
@@ -651,12 +677,19 @@ export default function ReportPage() {
         ) : (
           <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
             {commission.map((c) => (
-              <div key={c.staffId ?? "unassigned"} className="flex justify-between items-center px-3 py-2 text-sm">
-                <span className="text-gray-300">{c.name}</span>
-                <span className="font-mono text-gray-400">
-                  {yen(c.commission)}
-                  <span className="text-gray-500"> （{yen(c.salesWithTax)}）</span>
-                </span>
+              <div key={c.staffId ?? "unassigned"} className="px-3 py-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">{c.name}</span>
+                  <span className="font-mono text-gray-400">
+                    {yen(c.commission)}
+                    <span className="text-gray-500"> （{yen(c.salesWithTax)}）</span>
+                  </span>
+                </div>
+                {commissionScheme === "drink_back" && (
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    売上バック {yen(c.salesBack)} ・ 🍾ドリンクバック {yen(c.drinkBack)}（{c.drinkCount}杯）
+                  </div>
+                )}
               </div>
             ))}
           </div>

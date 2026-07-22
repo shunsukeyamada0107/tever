@@ -14,6 +14,7 @@ export type MenuItem = {
   course_minutes: number | null;
   active: boolean;
   sort_order: number;
+  is_cast_drink: boolean;
 };
 
 export type Tab = {
@@ -40,6 +41,7 @@ export type TabItem = {
   price: number;
   qty: number;
   source: "menu" | "manual";
+  is_cast_drink: boolean;
   created_at: string;
 };
 
@@ -86,6 +88,9 @@ export const EXPENSE_CATEGORY_COLORS: Record<string, string> = {
 export const DEFAULT_TAX_RATE = 0.10;
 export const DEFAULT_COMMISSION_RATE = 0.20;
 export const DEFAULT_BUSINESS_DAY_CUTOFF_HOUR = 6;
+export const DEFAULT_DRINK_BACK_AMOUNT = 200;
+
+export type CommissionScheme = "simple" | "drink_back";
 
 export function itemSubtotal(item: Pick<TabItem, "price" | "qty">) {
   return item.price * item.qty;
@@ -202,17 +207,26 @@ export type StaffCommission = {
   name: string;
   salesExTax: number;
   salesWithTax: number;
+  drinkCount: number;
+  drinkBack: number;
+  salesBack: number;
   commission: number;
 };
 
 // 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）を、
 // 品目ごとの担当（tab_items.staff_id で個別指定があればそれ、無ければ伝票の担当 tabs.staff_id）で按分する。
 // 例: 伝票の担当はAさんだが、シャンパンだけBさんに個別指定した場合、シャンパン分だけBさんの歩合になる。
+//
+// scheme="simple"（既定）: 按分した売上（税込・実会計額ベース）にcommissionRateを掛けるだけ。
+// scheme="drink_back": 按分した売上のうち、is_cast_drinkな品目分を除いた額にcommissionRateを掛けたもの（売上バック）に、
+//   is_cast_drink品目の数量×drinkBackAmount（ドリンクバック）を足す。
 export function staffCommissionBreakdown(
   tabs: TabWithItems[],
   staffNameOf: (staffId: string | null) => string,
   taxRate: number = DEFAULT_TAX_RATE,
-  commissionRate: number = DEFAULT_COMMISSION_RATE
+  commissionRate: number = DEFAULT_COMMISSION_RATE,
+  scheme: CommissionScheme = "simple",
+  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT
 ): StaffCommission[] {
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
@@ -226,10 +240,16 @@ export function staffCommissionBreakdown(
 
     // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定なら店舗の客扱いで対象外）
     const byStaff: Record<string, number> = {};
+    const byStaffDrink: Record<string, number> = {};
+    const byStaffDrinkQty: Record<string, number> = {};
     t.tab_items.forEach((i) => {
       const effectiveStaffId = i.staff_id ?? t.staff_id;
       if (!effectiveStaffId) return;
       byStaff[effectiveStaffId] = (byStaff[effectiveStaffId] ?? 0) + itemSubtotal(i);
+      if (i.is_cast_drink) {
+        byStaffDrink[effectiveStaffId] = (byStaffDrink[effectiveStaffId] ?? 0) + itemSubtotal(i);
+        byStaffDrinkQty[effectiveStaffId] = (byStaffDrinkQty[effectiveStaffId] ?? 0) + i.qty;
+      }
     });
 
     Object.entries(byStaff).forEach(([key, rawSub]) => {
@@ -238,11 +258,34 @@ export function staffCommissionBreakdown(
       const salesWithTax = actualTotal * shareRatio;
 
       if (!map[key]) {
-        map[key] = { staffId: key, name: staffNameOf(key), salesExTax: 0, salesWithTax: 0, commission: 0 };
+        map[key] = {
+          staffId: key,
+          name: staffNameOf(key),
+          salesExTax: 0,
+          salesWithTax: 0,
+          drinkCount: 0,
+          drinkBack: 0,
+          salesBack: 0,
+          commission: 0,
+        };
       }
       map[key].salesExTax += discountedSub;
       map[key].salesWithTax += salesWithTax;
-      map[key].commission += salesWithTax * commissionRate;
+
+      if (scheme === "drink_back") {
+        const drinkQty = byStaffDrinkQty[key] ?? 0;
+        const drinkDiscountedSub = (byStaffDrink[key] ?? 0) * discountFactor;
+        const drinkShareRatio = taxableSubtotal > 0 ? drinkDiscountedSub / taxableSubtotal : 0;
+        const drinkSalesWithTax = actualTotal * drinkShareRatio;
+        const salesBack = Math.max(0, salesWithTax - drinkSalesWithTax) * commissionRate;
+        const drinkBack = drinkQty * drinkBackAmount;
+        map[key].drinkCount += drinkQty;
+        map[key].salesBack += salesBack;
+        map[key].drinkBack += drinkBack;
+        map[key].commission += salesBack + drinkBack;
+      } else {
+        map[key].commission += salesWithTax * commissionRate;
+      }
     });
   });
   return Object.values(map).sort((a, b) => b.commission - a.commission);
@@ -269,7 +312,9 @@ export function daySummary(
   expenses: Expense[],
   staffNameOf: (staffId: string | null) => string,
   taxRate: number = DEFAULT_TAX_RATE,
-  commissionRate: number = DEFAULT_COMMISSION_RATE
+  commissionRate: number = DEFAULT_COMMISSION_RATE,
+  commissionScheme: CommissionScheme = "simple",
+  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT
 ): DaySummary {
   const subtotal = tabs.reduce(
     (a, t) => a + tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount),
@@ -277,7 +322,14 @@ export function daySummary(
   );
   const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount), 0);
   const laborHourly = dayLaborCost(attendance);
-  const commissionTotal = staffCommissionBreakdown(tabs, staffNameOf, taxRate, commissionRate).reduce(
+  const commissionTotal = staffCommissionBreakdown(
+    tabs,
+    staffNameOf,
+    taxRate,
+    commissionRate,
+    commissionScheme,
+    drinkBackAmount
+  ).reduce(
     (a, c) => a + c.commission,
     0
   );

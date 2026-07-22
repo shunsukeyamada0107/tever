@@ -3,20 +3,31 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
-import { MenuItem, Staff } from "@/lib/types";
+import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 
 const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, accentColor, reload } =
-    useStore();
+  const {
+    storeId,
+    taxRate,
+    commissionRate,
+    cutoffHour,
+    reportTemplate,
+    cashFloatAmount,
+    accentColor,
+    commissionScheme,
+    drinkBackAmount,
+    reload,
+  } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
   const [menuPrice, setMenuPrice] = useState("");
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
+  const [menuIsCastDrink, setMenuIsCastDrink] = useState(false);
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
   const [menuNameDrafts, setMenuNameDrafts] = useState<Record<string, string>>({});
   const [reorderingId, setReorderingId] = useState<string | null>(null);
@@ -26,6 +37,8 @@ export default function SettingsPage() {
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
   const [cashFloatDraft, setCashFloatDraft] = useState(String(cashFloatAmount));
   const [accentColorDraft, setAccentColorDraft] = useState(accentColor);
+  const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
+  const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
   const [templateDraft, setTemplateDraft] = useState(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -38,7 +51,18 @@ export default function SettingsPage() {
     setTemplateDraft(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
     setCashFloatDraft(String(cashFloatAmount));
     setAccentColorDraft(accentColor);
-  }, [taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, accentColor]);
+    setCommissionSchemeDraft(commissionScheme);
+    setDrinkBackAmountDraft(String(drinkBackAmount));
+  }, [
+    taxRate,
+    commissionRate,
+    cutoffHour,
+    reportTemplate,
+    cashFloatAmount,
+    accentColor,
+    commissionScheme,
+    drinkBackAmount,
+  ]);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -76,10 +100,17 @@ export default function SettingsPage() {
       price: Number(menuPrice),
       course_minutes: menuCourseMinutes.trim() === "" ? null : Number(menuCourseMinutes),
       sort_order: nextSortOrder,
+      is_cast_drink: menuIsCastDrink,
     });
     setMenuName("");
     setMenuPrice("");
     setMenuCourseMinutes("");
+    setMenuIsCastDrink(false);
+    loadData();
+  }
+
+  async function toggleCastDrink(m: MenuItem) {
+    await supabase.from("menu_items").update({ is_cast_drink: !m.is_cast_drink }).eq("id", m.id);
     loadData();
   }
 
@@ -132,6 +163,8 @@ export default function SettingsPage() {
         business_day_cutoff_hour: Number(cutoffHourDraft),
         cash_float_amount: Number(cashFloatDraft) || 0,
         accent_color: accentColorDraft,
+        commission_scheme: commissionSchemeDraft,
+        drink_back_amount: Number(drinkBackAmountDraft) || 0,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -165,7 +198,25 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">歩合率（%）</label>
+            <label className="block text-xs text-gray-400 mb-1">歩合の計算方式</label>
+            <select
+              value={commissionSchemeDraft}
+              onChange={(e) => setCommissionSchemeDraft(e.target.value as CommissionScheme)}
+              className="w-full rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            >
+              <option value="simple">売上の一律%（シンプル）</option>
+              <option value="drink_back">売上バック＋ドリンクバック</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {commissionSchemeDraft === "drink_back"
+                ? "（担当伝票の売上 − キャストドリンク代）× 歩合率 ＋ キャストドリンク数 × ドリンクバック単価"
+                : "担当した伝票の売上（実会計額）に、そのまま歩合率を掛けます"}
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              {commissionSchemeDraft === "drink_back" ? "売上バック率（%）" : "歩合率（%）"}
+            </label>
             <input
               value={commissionRateDraft}
               onChange={(e) => setCommissionRateDraft(e.target.value)}
@@ -173,6 +224,18 @@ export default function SettingsPage() {
               className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
             />
           </div>
+          {commissionSchemeDraft === "drink_back" && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">ドリンクバック単価（1杯あたり・円）</label>
+              <input
+                value={drinkBackAmountDraft}
+                onChange={(e) => setDrinkBackAmountDraft(e.target.value)}
+                inputMode="numeric"
+                placeholder={String(DEFAULT_DRINK_BACK_AMOUNT)}
+                className="w-28 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs text-gray-400 mb-1">
               営業日の切り替え時刻（この時刻より前は前日の営業として記録されます）
@@ -304,6 +367,15 @@ export default function SettingsPage() {
                 {m.course_minutes != null && ` ・⏱${m.course_minutes}分`}
               </span>
               <button
+                onClick={() => toggleCastDrink(m)}
+                title="キャストドリンク（ドリンクバック対象）"
+                className={`text-xs rounded-md border px-2 py-1 shrink-0 ${
+                  m.is_cast_drink ? "border-gold text-gold bg-gold/10" : "border-line text-gray-500"
+                }`}
+              >
+                🍾
+              </button>
+              <button
                 onClick={() => saveMenuName(m.id)}
                 disabled={(menuNameDrafts[m.id] ?? m.name) === m.name}
                 className="text-xs rounded-md border border-line px-2 py-1 text-gray-300 disabled:opacity-40 shrink-0"
@@ -316,33 +388,45 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-dashed border-line p-3 flex gap-2">
-          <input
-            value={menuName}
-            onChange={(e) => setMenuName(e.target.value)}
-            placeholder="品名"
-            className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-          />
-          <input
-            value={menuPrice}
-            onChange={(e) => setMenuPrice(e.target.value)}
-            placeholder="金額"
-            inputMode="numeric"
-            className="w-20 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-          />
-          <input
-            value={menuCourseMinutes}
-            onChange={(e) => setMenuCourseMinutes(e.target.value)}
-            placeholder="コース分(任意)"
-            inputMode="numeric"
-            className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-          />
-          <button
-            onClick={addMenuItem}
-            className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
-          >
-            ＋ 追加
-          </button>
+        <div className="rounded-xl border border-dashed border-line p-3 space-y-2">
+          <div className="flex gap-2">
+            <input
+              value={menuName}
+              onChange={(e) => setMenuName(e.target.value)}
+              placeholder="品名"
+              className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+            <input
+              value={menuPrice}
+              onChange={(e) => setMenuPrice(e.target.value)}
+              placeholder="金額"
+              inputMode="numeric"
+              className="w-20 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+            <input
+              value={menuCourseMinutes}
+              onChange={(e) => setMenuCourseMinutes(e.target.value)}
+              placeholder="コース分(任意)"
+              inputMode="numeric"
+              className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-xs text-gray-400">
+              <input
+                type="checkbox"
+                checked={menuIsCastDrink}
+                onChange={(e) => setMenuIsCastDrink(e.target.checked)}
+              />
+              🍾 キャストドリンク（ドリンクバック対象）
+            </label>
+            <button
+              onClick={addMenuItem}
+              className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
+            >
+              ＋ 追加
+            </button>
+          </div>
         </div>
         <div className="text-xs text-gray-500 mt-1">
           「コース分」は飲み放題など時間制メニュー用です。設定すると、営業タブでこのメニューをタップした瞬間に伝票へタイマーがセットされます

@@ -14,7 +14,9 @@ create table stores (
   name                      text not null,                 -- 例: "BAR TEVER"
   plan                      text not null default 'trial' check (plan in ('trial','paid','suspended')),
   tax_rate                  numeric not null default 0.10,  -- 消費税率（0.10=10%）
-  commission_rate           numeric not null default 0.20,  -- 歩合率（0.20=20%）
+  commission_rate           numeric not null default 0.20,  -- 歩合率（0.20=20%。ドリンクバック制では売上バックの率として使う）
+  commission_scheme         text not null default 'simple' check (commission_scheme in ('simple','drink_back')), -- 歩合の計算方式（simple=売上の一律%、drink_back=売上バック＋ドリンクバック）
+  drink_back_amount         numeric not null default 200,   -- ドリンクバック制での、ドリンク1杯あたりの固定バック額
   business_day_cutoff_hour  integer not null default 6,      -- 営業日の切り替え時刻（この時刻より前は前日扱い）
   report_template           text,                            -- LINE報告レポートの自由テンプレート（未設定ならアプリ側の既定形式を使う）
   cash_float_amount         numeric not null default 0,      -- 釣り銭元金（営業終了後に金庫に残す固定額）
@@ -58,6 +60,7 @@ create table menu_items (
   course_minutes  integer,           -- 飲み放題等コースの場合の時間（分）。null=通常メニュー
   active          boolean not null default true,
   sort_order      integer not null default 0,  -- メニュー管理画面での表示順（小さいほど上）
+  is_cast_drink   boolean not null default false, -- ドリンクバック制の対象（お客様がキャストに奢るドリンク）
   created_at      timestamptz not null default now()
 );
 
@@ -92,6 +95,7 @@ create table tab_items (
   price       numeric not null check (price >= 0),
   qty         integer not null default 1 check (qty > 0),
   source      text not null default 'manual' check (source in ('menu','manual')),
+  is_cast_drink boolean not null default false, -- 追加時点のメニューのキャストドリンク設定を引き継ぐ（後でメニュー側が変わっても過去分は変わらない）
   created_at  timestamptz not null default now()
 );
 

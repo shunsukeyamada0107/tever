@@ -246,12 +246,20 @@ function POSPageInner() {
           price: item.price,
           qty: 1,
           source: "menu",
+          is_cast_drink: item.is_cast_drink,
           created_at: new Date().toISOString(),
         };
         applyLocalTabItems(tabId, (items) => [...items, optimisticItem]);
         const { data } = await supabase
           .from("tab_items")
-          .insert({ tab_id: tabId, name: item.name, price: item.price, qty: 1, source: "menu" })
+          .insert({
+            tab_id: tabId,
+            name: item.name,
+            price: item.price,
+            qty: 1,
+            source: "menu",
+            is_cast_drink: item.is_cast_drink,
+          })
           .select()
           .single();
         if (data) {
@@ -710,6 +718,7 @@ function POSPageInner() {
                   className="group rounded-lg border border-line bg-elevated p-3 text-left disabled:opacity-40 active:bg-gold active:border-gold transition-colors"
                 >
                   <div className="text-sm font-bold group-active:text-bg">
+                    {m.is_cast_drink && "🍾 "}
                     {m.name}
                     {m.course_minutes != null && (
                       <span className="text-xs font-normal opacity-70"> ・⏱{m.course_minutes}分</span>
@@ -763,7 +772,10 @@ function POSPageInner() {
                 {activeTab.tab_items.map((i) => (
                   <div key={i.id} className="flex items-center gap-3 px-3 py-3">
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold truncate">{i.name}</div>
+                      <div className="font-bold truncate">
+                        {i.is_cast_drink && "🍾 "}
+                        {i.name}
+                      </div>
                       <div className="text-xs text-gray-400 mt-0.5">¥{i.price.toLocaleString()} / 個</div>
                       {staff.length > 0 &&
                         (!activeTab.closed_at ? (
