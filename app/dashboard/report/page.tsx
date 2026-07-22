@@ -550,14 +550,11 @@ export default function ReportPage() {
       </div>
 
       <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
-        <span className="text-gray-400">小計(税抜)</span>
-        <span className="text-right">{yen(summary.subtotal)}</span>
-        <span className="text-gray-400">消費税</span>
-        <span className="text-right">{yen(summary.tax)}</span>
-        <span className="text-gray-300 font-bold">合計(税込)</span>
+        <span className="text-gray-300 font-bold">総合売上（税込）</span>
         <span className="text-right text-gold font-bold">{yen(summary.total)}</span>
-        <span className="text-gray-400">人件費（歩合給+時給）</span>
-        <span className="text-right">{yen(summary.labor)}</span>
+        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
+        <span className="text-gray-400 mt-2">人件費（歩合給+時給）</span>
+        <span className="text-right mt-2">{yen(summary.labor)}</span>
         <span className="text-gray-400">経費</span>
         <span className="text-right">{yen(summary.expense)}</span>
         <span className="text-gray-300 font-bold">粗利</span>
@@ -665,14 +662,11 @@ export default function ReportPage() {
       <div>
         <div className="text-gold font-bold text-sm mb-2">今月サマリー（{monthLabel}）</div>
         <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
-          <span className="text-gray-400">売上小計(税抜)</span>
-          <span className="text-right">{yen(monthTotal.subtotal)}</span>
-          <span className="text-gray-400">消費税</span>
-          <span className="text-right">{yen(monthTotal.tax)}</span>
-          <span className="text-gray-300 font-bold">売上合計(税込)</span>
+          <span className="text-gray-300 font-bold">総合売上（税込）</span>
           <span className="text-right text-gold font-bold">{yen(monthTotal.total)}</span>
-          <span className="text-gray-400">人件費合計（歩合給+時給）</span>
-          <span className="text-right">{yen(monthTotal.labor)}</span>
+          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
+          <span className="text-gray-400 mt-2">人件費合計（歩合給+時給）</span>
+          <span className="text-right mt-2">{yen(monthTotal.labor)}</span>
           <span className="text-gray-400">経費合計</span>
           <span className="text-right">{yen(monthTotal.expense)}</span>
           <span className="text-gray-300 font-bold">粗利合計</span>
@@ -725,10 +719,13 @@ export default function ReportPage() {
               <div className="mt-3 pt-3 border-t border-dashed border-line">
                 {selectedChartRow ? (
                   <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
-                    <span className="text-gray-400">小計(税抜)</span>
-                    <span className="text-right">{yen(selectedChartRow.subtotal)}</span>
-                    <span className="text-gray-400">人件費（歩合給+時給）</span>
-                    <span className="text-right">{yen(selectedChartRow.labor)}</span>
+                    <span className="text-gray-300 font-bold">総合売上（税込）</span>
+                    <span className="text-right text-gold font-bold">{yen(selectedChartRow.total)}</span>
+                    <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
+                      （消費税 {yen(selectedChartRow.tax)}）
+                    </span>
+                    <span className="text-gray-400 mt-2">人件費（歩合給+時給）</span>
+                    <span className="text-right mt-2">{yen(selectedChartRow.labor)}</span>
                     <span className="text-gray-400">経費</span>
                     <span className="text-right">{yen(selectedChartRow.expense)}</span>
                     <span className="text-gray-300 font-bold">粗利</span>

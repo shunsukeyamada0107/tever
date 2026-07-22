@@ -282,7 +282,7 @@ export function daySummary(
     commissionTotal,
     labor,
     expense,
-    profit: subtotal - labor - expense,
+    profit: total - labor - expense,
     cash,
     card,
     unsettled,
