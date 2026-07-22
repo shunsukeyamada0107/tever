@@ -8,7 +8,7 @@ module.exports = {
         bg2: "#171B36",
         elevated: "#1E2342",
         line: "#2C3157",
-        gold: "#DCA84E",
+        gold: "rgb(var(--gold-rgb) / <alpha-value>)",
         rose: "#CE5468",
       },
     },

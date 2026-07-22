@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { StoreProvider, useStore } from "@/lib/StoreContext";
 import { BusinessDateProvider } from "@/lib/BusinessDateContext";
 import { createClient } from "@/lib/supabaseClient";
+import { hexToRgbTriplet } from "@/lib/types";
 
 const TABS = [
   { href: "/dashboard", label: "営業" },
@@ -13,6 +14,12 @@ const TABS = [
   { href: "/dashboard/report", label: "集計" },
   { href: "/dashboard/settings", label: "設定" },
 ];
+
+// 店舗ごとのブランドカラーを、Tailwindの gold カラーが参照するCSS変数に反映する
+function AccentColorStyle() {
+  const { accentColor } = useStore();
+  return <style>{`:root { --gold-rgb: ${hexToRgbTriplet(accentColor)}; }`}</style>;
+}
 
 function HeaderBar() {
   const router = useRouter();
@@ -42,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <StoreProvider>
       <BusinessDateProvider>
         <div className="min-h-screen pb-20">
+          <AccentColorStyle />
           <HeaderBar />
           <main className="p-4">{children}</main>
           <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { useBusinessDate } from "@/lib/BusinessDateContext";
 import { DateBar } from "@/lib/DateBar";
-import { Expense, EXPENSE_CATEGORIES } from "@/lib/types";
+import { Expense, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, EXPENSE_CATEGORY_COLORS } from "@/lib/types";
 
 export default function ExpensesPage() {
   const supabase = createClient();
@@ -73,6 +73,10 @@ export default function ExpensesPage() {
   }
 
   const total = expenses.reduce((a, e) => a + e.amount, 0);
+  const categoryBreakdown = EXPENSE_CATEGORIES.map((c) => ({
+    category: c,
+    amount: expenses.filter((e) => e.category === c).reduce((a, e) => a + e.amount, 0),
+  })).filter((c) => c.amount > 0);
 
   return (
     <div className="space-y-6">
@@ -87,7 +91,7 @@ export default function ExpensesPage() {
           >
             {EXPENSE_CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {EXPENSE_CATEGORY_ICONS[c]} {c}
               </option>
             ))}
           </select>
@@ -154,32 +158,55 @@ export default function ExpensesPage() {
             まだ記録がありません
           </div>
         ) : (
-          <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-            {expenses.map((e) => (
-              <div key={e.id} className="flex justify-between items-center px-3 py-2 text-sm">
-                <span className="flex items-center gap-2 min-w-0">
-                  {e.receipt_url && (
-                    <img
-                      src={e.receipt_url}
-                      alt="レシート"
-                      onClick={() => setViewerUrl(e.receipt_url)}
-                      className="w-8 h-8 object-cover rounded border border-line shrink-0 cursor-pointer"
-                    />
-                  )}
-                  <span className="text-xs rounded bg-bg2 border border-line px-1.5 py-0.5 shrink-0">
-                    {e.category}
-                  </span>
-                  <span className="text-gray-300 truncate">{e.name}</span>
-                </span>
-                <span className="font-mono text-gray-400 flex items-center gap-2 shrink-0">
-                  -¥{e.amount.toLocaleString()}
-                  <button onClick={() => deleteExpense(e.id)} className="text-rose">
-                    ✕
-                  </button>
-                </span>
+          <>
+            <div className="rounded-xl border border-line bg-elevated p-3 mb-2">
+              <div className="flex w-full h-2.5 rounded-full overflow-hidden bg-bg2">
+                {categoryBreakdown.map((c) => (
+                  <div
+                    key={c.category}
+                    style={{ width: `${(c.amount / total) * 100}%`, backgroundColor: EXPENSE_CATEGORY_COLORS[c.category] }}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
+                {categoryBreakdown.map((c) => (
+                  <div key={c.category} className="flex items-center gap-1 text-gray-400">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: EXPENSE_CATEGORY_COLORS[c.category] }}
+                    />
+                    {EXPENSE_CATEGORY_ICONS[c.category]} {c.category} ¥{c.amount.toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+              {expenses.map((e) => (
+                <div key={e.id} className="flex justify-between items-center px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 min-w-0">
+                    {e.receipt_url && (
+                      <img
+                        src={e.receipt_url}
+                        alt="レシート"
+                        onClick={() => setViewerUrl(e.receipt_url)}
+                        className="w-8 h-8 object-cover rounded border border-line shrink-0 cursor-pointer"
+                      />
+                    )}
+                    <span className="text-xs rounded bg-bg2 border border-line px-1.5 py-0.5 shrink-0">
+                      {EXPENSE_CATEGORY_ICONS[e.category] ?? "📌"} {e.category}
+                    </span>
+                    <span className="text-gray-300 truncate">{e.name}</span>
+                  </span>
+                  <span className="font-mono text-gray-400 flex items-center gap-2 shrink-0">
+                    -¥{e.amount.toLocaleString()}
+                    <button onClick={() => deleteExpense(e.id)} className="text-rose">
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

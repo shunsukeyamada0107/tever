@@ -10,7 +10,8 @@ const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, reload } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, accentColor, reload } =
+    useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
   const [cashFloatDraft, setCashFloatDraft] = useState(String(cashFloatAmount));
+  const [accentColorDraft, setAccentColorDraft] = useState(accentColor);
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
   const [templateDraft, setTemplateDraft] = useState(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -35,7 +37,8 @@ export default function SettingsPage() {
     setCutoffHourDraft(String(cutoffHour));
     setTemplateDraft(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
     setCashFloatDraft(String(cashFloatAmount));
-  }, [taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount]);
+    setAccentColorDraft(accentColor);
+  }, [taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, accentColor]);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -128,6 +131,7 @@ export default function SettingsPage() {
         commission_rate: Number(commissionRateDraft) / 100,
         business_day_cutoff_hour: Number(cutoffHourDraft),
         cash_float_amount: Number(cashFloatDraft) || 0,
+        accent_color: accentColorDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -195,6 +199,18 @@ export default function SettingsPage() {
               inputMode="numeric"
               className="w-28 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">ブランドカラー（アプリ内の強調色）</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={accentColorDraft}
+                onChange={(e) => setAccentColorDraft(e.target.value)}
+                className="w-10 h-9 rounded-md bg-bg2 border border-line p-0.5 cursor-pointer"
+              />
+              <span className="text-xs text-gray-400 font-mono">{accentColorDraft}</span>
+            </div>
           </div>
           <button
             onClick={saveStoreSettings}

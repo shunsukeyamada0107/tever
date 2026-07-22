@@ -408,47 +408,54 @@ function POSPageInner() {
       <DateBar />
       <div>
         <div className="text-gold font-bold text-sm mb-2">伝票（お客様・卓）・対応中 {openTabs.length}件</div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {openTabs.map((t) => {
-            const active = t.id === activeTabId;
-            const remaining = t.course_ends_at ? new Date(t.course_ends_at).getTime() - now : null;
-            const lastOrder = remaining !== null && remaining > 0 && remaining <= LAST_ORDER_WINDOW_MS;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTabId(t.id)}
-                style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
-                className={`shrink-0 min-w-[104px] text-left rounded-xl px-3 py-2.5 border-2 ${
-                  active
-                    ? "bg-gold border-gold text-bg"
-                    : "bg-elevated border-line text-gray-200"
-                }`}
-              >
-                <div className="text-sm font-bold truncate">
-                  {t.name}
-                  {t.guest_count != null && <span className="font-normal"> ・{t.guest_count}名</span>}
-                </div>
-                <div className={`text-xs font-mono mt-0.5 ${active ? "text-bg/70" : "text-gray-400"}`}>
-                  ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
-                </div>
-                {lastOrder && (
-                  <div className="text-xs font-bold mt-0.5 text-rose">⏰ ラストオーダー</div>
-                )}
-              </button>
-            );
-          })}
-          <button
-            onClick={openCreateModal}
-            className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold border-2 border-dashed border-gold text-gold whitespace-nowrap"
-          >
-            📝 伝票を作る
-          </button>
-        </div>
+        {openTabs.length === 0 ? (
+          <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+            対応中の伝票はありません
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {openTabs.map((t) => {
+              const active = t.id === activeTabId;
+              const remaining = t.course_ends_at ? new Date(t.course_ends_at).getTime() - now : null;
+              const lastOrder = remaining !== null && remaining > 0 && remaining <= LAST_ORDER_WINDOW_MS;
+              const elapsedMin = Math.max(0, Math.floor((now - new Date(t.created_at).getTime()) / 60000));
+              const name = staffName(t.staff_id);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTabId(t.id)}
+                  style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
+                  className={`text-left rounded-xl px-3 py-2.5 border-2 ${
+                    active ? "bg-gold border-gold text-bg" : "bg-elevated border-line text-gray-200"
+                  }`}
+                >
+                  <div className="text-sm font-bold truncate">
+                    {t.name}
+                    {t.guest_count != null && <span className="font-normal"> ・{t.guest_count}名</span>}
+                  </div>
+                  <div className={`text-xs mt-0.5 truncate ${active ? "text-bg/70" : "text-gray-400"}`}>
+                    {name ? `👤${name} ・ ` : ""}⏱{elapsedMin}分
+                  </div>
+                  <div className={`text-sm font-mono font-bold mt-1 ${active ? "text-bg" : "text-gold"}`}>
+                    ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
+                  </div>
+                  {lastOrder && <div className="text-xs font-bold mt-0.5 text-rose">⏰ ラストオーダー</div>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button
+          onClick={openCreateModal}
+          className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-bold border-2 border-dashed border-gold text-gold"
+        >
+          📝 伝票を作る
+        </button>
 
         {closedTabs.length > 0 && (
           <div className="mt-3 pt-3 border-t border-dashed border-line">
             <div className="text-xs text-gray-500 mb-2">✓ 会計済み（{closedTabs.length}件）</div>
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="grid grid-cols-2 gap-2">
               {closedTabs.map((t) => {
                 const active = t.id === activeTabId;
                 return (
@@ -456,7 +463,7 @@ function POSPageInner() {
                     key={t.id}
                     onClick={() => setActiveTabId(t.id)}
                     style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
-                    className={`shrink-0 min-w-[104px] text-left rounded-xl px-3 py-2.5 border-2 opacity-70 ${
+                    className={`text-left rounded-xl px-3 py-2.5 border-2 opacity-70 ${
                       active ? "border-gold text-gray-200" : "border-line text-gray-400"
                     } bg-elevated`}
                   >
@@ -835,6 +842,14 @@ function POSPageInner() {
           伝票を選択するか、新しく作成してください
         </div>
       )}
+
+      <button
+        onClick={openCreateModal}
+        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gold text-bg text-2xl font-bold shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        aria-label="伝票を作る"
+      >
+        ＋
+      </button>
 
       {showCreateModal && (
         <div

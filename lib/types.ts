@@ -68,6 +68,20 @@ export type Expense = {
 
 export const EXPENSE_CATEGORIES = ["仕入れ", "消耗品", "雑費", "その他"];
 
+export const EXPENSE_CATEGORY_ICONS: Record<string, string> = {
+  仕入れ: "📦",
+  消耗品: "🧻",
+  雑費: "🧾",
+  その他: "📌",
+};
+
+export const EXPENSE_CATEGORY_COLORS: Record<string, string> = {
+  仕入れ: "#DCA84E",
+  消耗品: "#6FB3E0",
+  雑費: "#7FCB8F",
+  その他: "#B78FE0",
+};
+
 // 店舗設定が未取得の場合のフォールバック値
 export const DEFAULT_TAX_RATE = 0.10;
 export const DEFAULT_COMMISSION_RATE = 0.20;
@@ -126,6 +140,14 @@ export function tabTotal(
     tabTaxableSubtotal(items, discountPercent, discountAmount) +
     tabTax(items, taxRate, discountPercent, discountAmount);
   return roundUpTo100(raw);
+}
+
+// "#RRGGBB" → "R G B"（TailwindのCSS変数カラーに渡すための形式）。不正な値なら既定のゴールドにフォールバック
+export function hexToRgbTriplet(hex: string, fallback = "220 168 78"): string {
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!match) return fallback;
+  const n = parseInt(match[1], 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
 }
 
 // 伝票ごとに見分けやすいよう、IDから決定的に色を割り当てる

@@ -12,9 +12,12 @@ type StoreContextValue = {
   cutoffHour: number;
   reportTemplate: string | null;
   cashFloatAmount: number;
+  accentColor: string;
   loading: boolean;
   reload: () => void;
 };
+
+const DEFAULT_ACCENT_COLOR = "#DCA84E";
 
 const StoreContext = createContext<StoreContextValue>({
   storeId: null,
@@ -24,6 +27,7 @@ const StoreContext = createContext<StoreContextValue>({
   cutoffHour: DEFAULT_BUSINESS_DAY_CUTOFF_HOUR,
   reportTemplate: null,
   cashFloatAmount: 0,
+  accentColor: DEFAULT_ACCENT_COLOR,
   loading: true,
   reload: () => {},
 });
@@ -37,6 +41,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [cutoffHour, setCutoffHour] = useState(DEFAULT_BUSINESS_DAY_CUTOFF_HOUR);
   const [reportTemplate, setReportTemplate] = useState<string | null>(null);
   const [cashFloatAmount, setCashFloatAmount] = useState(0);
+  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -53,7 +58,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: member } = await supabase
         .from("store_members")
         .select(
-          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount)"
+          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color)"
         )
         .eq("user_id", userData.user.id)
         .limit(1)
@@ -68,6 +73,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           business_day_cutoff_hour: number;
           report_template: string | null;
           cash_float_amount: number;
+          accent_color: string | null;
         };
         const stores = member.stores as unknown as StoreRow | StoreRow[] | null;
         const store = Array.isArray(stores) ? stores[0] : stores;
@@ -77,6 +83,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setCutoffHour(store?.business_day_cutoff_hour ?? DEFAULT_BUSINESS_DAY_CUTOFF_HOUR);
         setReportTemplate(store?.report_template ?? null);
         setCashFloatAmount(store?.cash_float_amount ?? 0);
+        setAccentColor(store?.accent_color ?? DEFAULT_ACCENT_COLOR);
       }
       setLoading(false);
     }
@@ -93,6 +100,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         cutoffHour,
         reportTemplate,
         cashFloatAmount,
+        accentColor,
         loading,
         reload,
       }}

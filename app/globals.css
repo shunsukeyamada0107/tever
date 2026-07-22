@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --gold-rgb: 220 168 78;
+}
+
 body {
   background: #11142A;
   color: #EEEAF2;
