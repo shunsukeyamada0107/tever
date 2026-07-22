@@ -568,12 +568,16 @@ export default function ReportPage() {
       <div>
         <div className="text-gold font-bold text-sm mb-2">現金精算</div>
         <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
-          <span className="text-gray-300 font-bold">封筒に入れる現金（現金売上）</span>
-          <span className="text-right text-gold font-bold">{yen(summary.cash)}</span>
-          <span className="text-gray-400">金庫に残す現金（釣り銭元金）</span>
-          <span className="text-right">{yen(cashFloatAmount)}</span>
-          <span className="text-gray-400 mt-2">レジにあるはずの現金合計</span>
-          <span className="text-right mt-2">{yen(summary.cash + cashFloatAmount)}</span>
+          <span className="text-gray-400">現金売上</span>
+          <span className="text-right">{yen(summary.cash)}</span>
+          <span className="text-gray-400">経費（現金支払い分）</span>
+          <span className="text-right">−{yen(summary.expense)}</span>
+          <span className="text-gray-300 font-bold">封筒に入れる現金</span>
+          <span className="text-right text-gold font-bold">{yen(summary.cash - summary.expense)}</span>
+          <span className="text-gray-400 mt-2">金庫に残す現金（釣り銭元金）</span>
+          <span className="text-right mt-2">{yen(cashFloatAmount)}</span>
+          <span className="text-gray-400">レジにあるはずの現金合計</span>
+          <span className="text-right">{yen(summary.cash - summary.expense + cashFloatAmount)}</span>
         </div>
       </div>
 
