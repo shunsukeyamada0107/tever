@@ -38,6 +38,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (user && pathname.startsWith("/dashboard")) {
+    const { data: membership } = await supabase
+      .from("store_members")
+      .select("stores(plan)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single();
+    type StoreRow = { plan: string };
+    const stores = membership?.stores as unknown as StoreRow | StoreRow[] | null;
+    const plan = (Array.isArray(stores) ? stores[0] : stores)?.plan;
+    if (plan === "suspended") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/suspended";
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (pathname.startsWith("/admin") && !isOperatorEmail(user?.email)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

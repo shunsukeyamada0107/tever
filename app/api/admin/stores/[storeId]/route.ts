@@ -13,6 +13,29 @@ async function requireOperator() {
   return isOperatorEmail(user?.email) ? user : null;
 }
 
+const VALID_PLANS = ["trial", "paid", "suspended"] as const;
+
+export async function PATCH(request: Request, { params }: { params: { storeId: string } }) {
+  const user = await requireOperator();
+  if (!user) {
+    return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const plan = body.plan;
+  if (!VALID_PLANS.includes(plan)) {
+    return NextResponse.json({ error: "不正なプランです" }, { status: 400 });
+  }
+
+  const admin = createAdminSupabaseClient();
+  const { error } = await admin.from("stores").update({ plan }).eq("id", params.storeId);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(_request: Request, { params }: { params: { storeId: string } }) {
   const user = await requireOperator();
   if (!user) {

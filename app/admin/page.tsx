@@ -9,6 +9,12 @@ type StoreRow = {
   created_at: string;
 };
 
+const PLAN_LABELS: Record<string, string> = {
+  trial: "お試し中",
+  paid: "有料（支払い済み）",
+  suspended: "停止中",
+};
+
 function generatePassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let out = "";
@@ -32,6 +38,8 @@ export default function AdminPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [enteringId, setEnteringId] = useState<string | null>(null);
   const [enterError, setEnterError] = useState<string | null>(null);
+  const [updatingPlanId, setUpdatingPlanId] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   async function loadStores() {
     setListError(null);
@@ -118,6 +126,27 @@ export default function AdminPage() {
     window.location.href = body.url;
   }
 
+  async function handlePlanChange(store: StoreRow, plan: string) {
+    setPlanError(null);
+    setUpdatingPlanId(store.id);
+
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
+    const body = await res.json();
+
+    setUpdatingPlanId(null);
+
+    if (!res.ok) {
+      setPlanError(body.error ?? "プランの変更に失敗しました。");
+      return;
+    }
+
+    loadStores();
+  }
+
   return (
     <main className="min-h-screen px-4 py-8 max-w-lg mx-auto space-y-8">
       <h1 className="text-gold text-lg font-bold">店舗管理（運営用）</h1>
@@ -191,6 +220,7 @@ export default function AdminPage() {
         {listError && <p className="text-rose text-sm">{listError}</p>}
         {deleteError && <p className="text-rose text-sm">{deleteError}</p>}
         {enterError && <p className="text-rose text-sm">{enterError}</p>}
+        {planError && <p className="text-rose text-sm">{planError}</p>}
         {stores && stores.length > 0 && (
           <p className="text-xs text-gray-500">
             「入る」を押すとその店舗のオーナーとしてログインし直されます。運営アカウントに戻るには、一度ログアウトして自分のメールで再ログインしてください。
@@ -201,28 +231,43 @@ export default function AdminPage() {
         {stores && stores.length > 0 && (
           <ul className="divide-y divide-line border border-line rounded-xl overflow-hidden">
             {stores.map((s) => (
-              <li key={s.id} className="px-4 py-3 bg-bg2 flex items-center justify-between text-sm">
-                <div>
-                  <div className="font-bold">{s.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(s.created_at).toLocaleDateString("ja-JP")} ・ {s.plan}
+              <li key={s.id} className="px-4 py-3 bg-bg2 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold">{s.name}</div>
+                    <div className="text-xs text-gray-500">{new Date(s.created_at).toLocaleDateString("ja-JP")}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEnter(s)}
+                      disabled={enteringId === s.id}
+                      className="text-xs text-gold border border-gold/50 rounded-md px-2 py-1 disabled:opacity-50"
+                    >
+                      {enteringId === s.id ? "移動中..." : "入る"}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(s)}
+                      disabled={deletingId === s.id}
+                      className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
+                    >
+                      {deletingId === s.id ? "削除中..." : "削除"}
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEnter(s)}
-                    disabled={enteringId === s.id}
-                    className="text-xs text-gold border border-gold/50 rounded-md px-2 py-1 disabled:opacity-50"
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">状態</span>
+                  <select
+                    value={s.plan}
+                    onChange={(e) => handlePlanChange(s, e.target.value)}
+                    disabled={updatingPlanId === s.id}
+                    className="text-xs rounded-md bg-bg border border-line px-2 py-1 disabled:opacity-50"
                   >
-                    {enteringId === s.id ? "移動中..." : "入る"}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(s)}
-                    disabled={deletingId === s.id}
-                    className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
-                  >
-                    {deletingId === s.id ? "削除中..." : "削除"}
-                  </button>
+                    {Object.entries(PLAN_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </li>
             ))}
