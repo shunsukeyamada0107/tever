@@ -55,6 +55,7 @@ create table menu_items (
   price           numeric not null check (price >= 0),
   course_minutes  integer,           -- 飲み放題等コースの場合の時間（分）。null=通常メニュー
   active          boolean not null default true,
+  sort_order      integer not null default 0,  -- メニュー管理画面での表示順（小さいほど上）
   created_at      timestamptz not null default now()
 );
 

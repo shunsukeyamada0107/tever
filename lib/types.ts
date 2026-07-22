@@ -13,6 +13,7 @@ export type MenuItem = {
   price: number;
   course_minutes: number | null;
   active: boolean;
+  sort_order: number;
 };
 
 export type Tab = {

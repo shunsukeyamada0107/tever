@@ -84,7 +84,8 @@ function POSPageInner() {
       .from("menu_items")
       .select("*")
       .eq("store_id", storeId)
-      .eq("active", true);
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
     setMenu(menuData ?? []);
 
     const { data: staffData } = await supabase

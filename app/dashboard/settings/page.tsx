@@ -17,6 +17,8 @@ export default function SettingsPage() {
   const [menuPrice, setMenuPrice] = useState("");
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
+  const [menuNameDrafts, setMenuNameDrafts] = useState<Record<string, string>>({});
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
@@ -40,8 +42,9 @@ export default function SettingsPage() {
       .select("*")
       .eq("store_id", storeId)
       .eq("active", true)
-      .order("created_at", { ascending: true });
+      .order("sort_order", { ascending: true });
     setMenu(menuData ?? []);
+    setMenuNameDrafts(Object.fromEntries((menuData ?? []).map((m) => [m.id, m.name])));
 
     const { data: staffData } = await supabase
       .from("staff")
@@ -61,11 +64,13 @@ export default function SettingsPage() {
 
   async function addMenuItem() {
     if (!storeId || !menuName.trim() || !menuPrice.trim()) return;
+    const nextSortOrder = menu.reduce((max, m) => Math.max(max, m.sort_order), 0) + 1;
     await supabase.from("menu_items").insert({
       store_id: storeId,
       name: menuName.trim(),
       price: Number(menuPrice),
       course_minutes: menuCourseMinutes.trim() === "" ? null : Number(menuCourseMinutes),
+      sort_order: nextSortOrder,
     });
     setMenuName("");
     setMenuPrice("");
@@ -75,6 +80,27 @@ export default function SettingsPage() {
 
   async function removeMenuItem(id: string) {
     await supabase.from("menu_items").update({ active: false }).eq("id", id);
+    loadData();
+  }
+
+  async function saveMenuName(id: string) {
+    const name = (menuNameDrafts[id] ?? "").trim();
+    if (!name) return;
+    await supabase.from("menu_items").update({ name }).eq("id", id);
+    loadData();
+  }
+
+  async function moveMenuItem(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= menu.length) return;
+    const current = menu[index];
+    const target = menu[targetIndex];
+    setReorderingId(current.id);
+    await Promise.all([
+      supabase.from("menu_items").update({ sort_order: target.sort_order }).eq("id", current.id),
+      supabase.from("menu_items").update({ sort_order: current.sort_order }).eq("id", target.id),
+    ]);
+    setReorderingId(null);
     loadData();
   }
 
@@ -218,15 +244,43 @@ export default function SettingsPage() {
           {menu.length === 0 && (
             <div className="text-sm text-gray-500 text-center py-6">メニューが未登録です</div>
           )}
-          {menu.map((m) => (
-            <div key={m.id} className="flex justify-between items-center px-3 py-2 text-sm">
-              <span className="text-gray-300">
-                {m.name}・¥{m.price.toLocaleString()}
-                {m.course_minutes != null && (
-                  <span className="text-xs text-gray-500"> ・⏱{m.course_minutes}分コース</span>
-                )}
+          {menu.map((m, i) => (
+            <div key={m.id} className="flex justify-between items-center px-3 py-2 text-sm gap-2">
+              <div className="flex flex-col shrink-0">
+                <button
+                  onClick={() => moveMenuItem(i, -1)}
+                  disabled={i === 0 || reorderingId !== null}
+                  className="text-gray-400 disabled:opacity-20 leading-none px-1"
+                  aria-label="上に移動"
+                >
+                  ▲
+                </button>
+                <button
+                  onClick={() => moveMenuItem(i, 1)}
+                  disabled={i === menu.length - 1 || reorderingId !== null}
+                  className="text-gray-400 disabled:opacity-20 leading-none px-1"
+                  aria-label="下に移動"
+                >
+                  ▼
+                </button>
+              </div>
+              <input
+                value={menuNameDrafts[m.id] ?? m.name}
+                onChange={(e) => setMenuNameDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
+                className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1 text-sm text-gray-300"
+              />
+              <span className="text-xs text-gray-500 shrink-0">
+                ¥{m.price.toLocaleString()}
+                {m.course_minutes != null && ` ・⏱${m.course_minutes}分`}
               </span>
-              <button onClick={() => removeMenuItem(m.id)} className="text-rose text-xs">
+              <button
+                onClick={() => saveMenuName(m.id)}
+                disabled={(menuNameDrafts[m.id] ?? m.name) === m.name}
+                className="text-xs rounded-md border border-line px-2 py-1 text-gray-300 disabled:opacity-40 shrink-0"
+              >
+                保存
+              </button>
+              <button onClick={() => removeMenuItem(m.id)} className="text-rose text-xs shrink-0">
                 削除
               </button>
             </div>
