@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
@@ -38,12 +38,20 @@ function monthRange(d: Date) {
   return { start, end, label: `${year}年${month + 1}月` };
 }
 
+function pctChange(now: number, prev: number): number | null {
+  if (prev === 0) return null;
+  return ((now - prev) / prev) * 100;
+}
+
 export default function ReportPage() {
   const router = useRouter();
   const supabase = createClient();
   const { storeId, storeName, taxRate, commissionRate } = useStore();
   const { date: businessDate } = useBusinessDate();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
+  const prevMonthAnchor = new Date(`${monthStart}T12:00:00`);
+  prevMonthAnchor.setMonth(prevMonthAnchor.getMonth() - 1);
+  const { start: prevMonthStart, end: prevMonthEnd, label: prevMonthLabel } = monthRange(prevMonthAnchor);
 
   const [staff, setStaff] = useState<Staff[]>([]);
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
@@ -60,6 +68,7 @@ export default function ReportPage() {
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
   const [showCostChart, setShowCostChart] = useState(false);
   const [selectedCostDate, setSelectedCostDate] = useState<string | null>(null);
+  const [prevMonthSummary, setPrevMonthSummary] = useState<DaySummary | null>(null);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -87,7 +96,14 @@ export default function ReportPage() {
       .eq("business_date", businessDate);
     setExpenses(expData ?? []);
 
-    const [{ data: monthTabs }, { data: monthAtt }, { data: monthExp }] = await Promise.all([
+    const [
+      { data: monthTabs },
+      { data: monthAtt },
+      { data: monthExp },
+      { data: prevTabs },
+      { data: prevAtt },
+      { data: prevExp },
+    ] = await Promise.all([
       supabase
         .from("tabs")
         .select("*, tab_items(*)")
@@ -106,6 +122,24 @@ export default function ReportPage() {
         .eq("store_id", storeId)
         .gte("business_date", monthStart)
         .lte("business_date", monthEnd),
+      supabase
+        .from("tabs")
+        .select("*, tab_items(*)")
+        .eq("store_id", storeId)
+        .gte("business_date", prevMonthStart)
+        .lte("business_date", prevMonthEnd),
+      supabase
+        .from("attendance")
+        .select("*")
+        .eq("store_id", storeId)
+        .gte("business_date", prevMonthStart)
+        .lte("business_date", prevMonthEnd),
+      supabase
+        .from("expenses")
+        .select("*")
+        .eq("store_id", storeId)
+        .gte("business_date", prevMonthStart)
+        .lte("business_date", prevMonthEnd),
     ]);
 
     const dates = new Set<string>();
@@ -133,7 +167,17 @@ export default function ReportPage() {
     setMonthTabsRaw((monthTabs as TabWithItems[]) ?? []);
     setMonthAttRaw((monthAtt as Attendance[]) ?? []);
     setMonthExpRaw((monthExp as Expense[]) ?? []);
-  }, [storeId, businessDate, monthStart, monthEnd, taxRate, commissionRate]);
+    setPrevMonthSummary(
+      daySummary(
+        (prevTabs as TabWithItems[]) ?? [],
+        (prevAtt as Attendance[]) ?? [],
+        (prevExp as Expense[]) ?? [],
+        staffNameOf,
+        taxRate,
+        commissionRate
+      )
+    );
+  }, [storeId, businessDate, monthStart, monthEnd, prevMonthStart, prevMonthEnd, taxRate, commissionRate]);
 
   useEffect(() => {
     loadData();
@@ -303,94 +347,202 @@ export default function ReportPage() {
   async function exportExcel() {
     setExporting(true);
     try {
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
 
-      const summarySheet = XLSX.utils.aoa_to_sheet([
-        ["日報", businessDate],
-        [],
+      const GOLD = "FFDCA84E";
+      const DARK = "FF11142A";
+      const BAND = "FFE0F7FA";
+      const ROSE = "FFCE5468";
+      const BORDER: import("exceljs").Border = { style: "thin", color: { argb: "FFDDDDDD" } };
+
+      const styleHeaderRow = (row: import("exceljs").Row) => {
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GOLD } };
+          cell.font = { bold: true, color: { argb: DARK } };
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+          cell.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        });
+      };
+
+      const styleDataRow = (row: import("exceljs").Row, banded: boolean) => {
+        row.eachCell((cell) => {
+          if (banded) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BAND } };
+          cell.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        });
+      };
+
+      // --- 日報サマリー ---
+      const summarySheet = wb.addWorksheet("日報サマリー");
+      summarySheet.columns = [{ width: 18 }, { width: 16 }];
+      const titleRow = summarySheet.addRow(["日報", businessDate]);
+      titleRow.font = { bold: true, size: 13, color: { argb: GOLD } };
+      summarySheet.addRow([]);
+      const summaryData: [string, number][] = [
         ["小計(税抜)", Math.round(summary.subtotal)],
         ["消費税", Math.round(summary.tax)],
         ["合計(税込)", Math.round(summary.total)],
         ["歩合給", Math.round(summary.commissionTotal)],
         ["経費", Math.round(summary.expense)],
         ["粗利", Math.round(summary.profit)],
-        [],
+      ];
+      summaryData.forEach(([label, value]) => {
+        const row = summarySheet.addRow([label, value]);
+        row.getCell(2).numFmt = '"¥"#,##0';
+        if (label === "粗利") row.font = { bold: true, color: { argb: GOLD } };
+      });
+      summarySheet.addRow([]);
+      [
         ["現金", Math.round(summary.cash)],
         ["カード", Math.round(summary.card)],
         ["未会計", Math.round(summary.unsettled)],
-      ]);
-      XLSX.utils.book_append_sheet(wb, summarySheet, "日報サマリー");
+      ].forEach(([label, value]) => {
+        const row = summarySheet.addRow([label, value]);
+        row.getCell(2).numFmt = '"¥"#,##0';
+      });
 
-      const tabSheet = XLSX.utils.json_to_sheet(
-        tabRows.map((t) => ({
-          伝票名: t.name,
-          担当スタッフ: staffName(t.staff_id),
-          状態: t.closed_at ? "会計済み" : "対応中",
-          会計方法: t.payment_method ?? "",
-          来店: new Date(t.created_at).toLocaleTimeString("ja-JP"),
-          退店: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
-          品数: t.tab_items.reduce((a, i) => a + i.qty, 0),
-          小計: Math.round(tabSubtotal(t.tab_items)),
-          消費税: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
-          合計: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
-        }))
-      );
-      XLSX.utils.book_append_sheet(wb, tabSheet, "伝票別");
+      // --- 伝票別 ---
+      const tabSheet = wb.addWorksheet("伝票別");
+      tabSheet.columns = [
+        { header: "伝票名", key: "name", width: 16 },
+        { header: "担当スタッフ", key: "staff", width: 14 },
+        { header: "状態", key: "status", width: 10 },
+        { header: "会計方法", key: "method", width: 10 },
+        { header: "来店", key: "in", width: 10 },
+        { header: "退店", key: "out", width: 10 },
+        { header: "品数", key: "count", width: 8 },
+        { header: "小計", key: "subtotal", width: 12 },
+        { header: "消費税", key: "tax", width: 12 },
+        { header: "合計", key: "total", width: 12 },
+      ];
+      styleHeaderRow(tabSheet.getRow(1));
+      tabRows.forEach((t, i) => {
+        const row = tabSheet.addRow({
+          name: t.name,
+          staff: staffName(t.staff_id),
+          status: t.closed_at ? "会計済み" : "対応中",
+          method: t.payment_method ?? "",
+          in: new Date(t.created_at).toLocaleTimeString("ja-JP"),
+          out: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
+          count: t.tab_items.reduce((a, x) => a + x.qty, 0),
+          subtotal: Math.round(tabSubtotal(t.tab_items)),
+          tax: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
+          total: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
+        });
+        row.getCell("subtotal").numFmt = '"¥"#,##0';
+        row.getCell("tax").numFmt = '"¥"#,##0';
+        row.getCell("total").numFmt = '"¥"#,##0';
+        styleDataRow(row, i % 2 === 1);
+      });
 
-      const staffSheet = XLSX.utils.json_to_sheet(
-        commission.map((c) => ({
-          スタッフ: c.name,
-          売上税抜: Math.round(c.salesExTax),
-          売上税込: Math.round(c.salesWithTax),
-          歩合給: Math.round(c.commission),
-        }))
-      );
-      XLSX.utils.book_append_sheet(wb, staffSheet, "スタッフ別歩合");
+      // --- スタッフ別歩合 ---
+      const staffSheet = wb.addWorksheet("スタッフ別歩合");
+      staffSheet.columns = [
+        { header: "スタッフ", key: "name", width: 14 },
+        { header: "売上税抜", key: "exTax", width: 14 },
+        { header: "売上税込", key: "withTax", width: 14 },
+        { header: "歩合給", key: "commission", width: 14 },
+      ];
+      styleHeaderRow(staffSheet.getRow(1));
+      commission.forEach((c, i) => {
+        const row = staffSheet.addRow({
+          name: c.name,
+          exTax: Math.round(c.salesExTax),
+          withTax: Math.round(c.salesWithTax),
+          commission: Math.round(c.commission),
+        });
+        ["exTax", "withTax", "commission"].forEach((k) => (row.getCell(k).numFmt = '"¥"#,##0'));
+        row.getCell("commission").font = { bold: true, color: { argb: GOLD } };
+        styleDataRow(row, i % 2 === 1);
+      });
 
+      // --- 時給人件費 ---
       if (hourlyLabor.length > 0) {
-        const hourlySheet = XLSX.utils.json_to_sheet(
-          hourlyLabor.map((h) => ({
-            スタッフ: h.name,
-            勤務時間: Number(h.hours.toFixed(1)),
-            人件費: Math.round(h.cost),
-          }))
-        );
-        XLSX.utils.book_append_sheet(wb, hourlySheet, "時給人件費");
+        const hourlySheet = wb.addWorksheet("時給人件費");
+        hourlySheet.columns = [
+          { header: "スタッフ", key: "name", width: 14 },
+          { header: "勤務時間", key: "hours", width: 12 },
+          { header: "人件費", key: "cost", width: 14 },
+        ];
+        styleHeaderRow(hourlySheet.getRow(1));
+        hourlyLabor.forEach((h, i) => {
+          const row = hourlySheet.addRow({ name: h.name, hours: Number(h.hours.toFixed(1)), cost: Math.round(h.cost) });
+          row.getCell("cost").numFmt = '"¥"#,##0';
+          styleDataRow(row, i % 2 === 1);
+        });
       }
 
-      // 月の売上管理表：日ごとの売上高・原価・粗利益・組数・人数（月内の全日を1〜末日まで表示）
+      // --- 月の売上管理表：日ごとの売上高・原価・粗利益・組数・人数（月内の全日を1〜末日まで表示） ---
       const [monthYear, monthNum] = monthStart.split("-").map(Number);
       const daysInMonth = new Date(monthYear, monthNum, 0).getDate();
       const rowByDate = new Map(monthRows.map((r) => [r.date, r]));
-      const ledgerRows: (string | number)[][] = [];
+
+      const monthSheet = wb.addWorksheet(`月次(${monthLabel})`);
+      monthSheet.columns = [
+        { width: 8 },
+        { width: 13 },
+        { width: 13 },
+        { width: 13 },
+        { width: 10 },
+        { width: 10 },
+      ];
+      const titleRow2 = monthSheet.addRow(["月", storeName ?? ""]);
+      titleRow2.font = { bold: true, size: 13, color: { argb: GOLD } };
+      styleHeaderRow(monthSheet.addRow(["日", "売上高", "原価", "粗利益", "組数", "人数"]));
+
       for (let day = 1; day <= daysInMonth; day++) {
         const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
         const r = rowByDate.get(date);
         const sales = r ? Math.round(r.subtotal) : 0;
         const cost = r ? Math.round(r.expense) : 0;
-        ledgerRows.push([day, sales, cost, sales - cost, r?.tabCount ?? 0, r?.guestCount ?? 0]);
+        const row = monthSheet.addRow([day, sales, cost, sales - cost, r?.tabCount ?? 0, r?.guestCount ?? 0]);
+        [2, 3, 4].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
+        styleDataRow(row, day % 2 === 0);
       }
       const ledgerTotalSales = Math.round(monthTotal.subtotal);
       const ledgerTotalCost = Math.round(monthTotal.expense);
-
-      const monthSheet = XLSX.utils.aoa_to_sheet([
-        ["月", storeName ?? ""],
-        ["", "売上高", "原価", "粗利益", "組数", "人数"],
-        ...ledgerRows,
-        [
-          "合計",
-          ledgerTotalSales,
-          ledgerTotalCost,
-          ledgerTotalSales - ledgerTotalCost,
-          monthTotal.tabCount,
-          monthTotal.guestCount,
-        ],
+      const totalRow = monthSheet.addRow([
+        "合計",
+        ledgerTotalSales,
+        ledgerTotalCost,
+        ledgerTotalSales - ledgerTotalCost,
+        monthTotal.tabCount,
+        monthTotal.guestCount,
       ]);
-      monthSheet["!cols"] = [{ wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }];
-      XLSX.utils.book_append_sheet(wb, monthSheet, `月次(${monthLabel})`);
+      totalRow.font = { bold: true };
+      totalRow.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GOLD } };
+        cell.font = { bold: true, color: { argb: DARK } };
+      });
+      [2, 3, 4].forEach((c) => (totalRow.getCell(c).numFmt = '"¥"#,##0'));
 
-      XLSX.writeFile(wb, `BAR_TEVER_${businessDate}.xlsx`);
+      if (prevMonthSummary) {
+        monthSheet.addRow([]);
+        const cmpHeader = monthSheet.addRow([`${prevMonthLabel}比`, "今月", "先月", "増減%"]);
+        cmpHeader.font = { bold: true };
+        (
+          [
+            ["売上(税込)", monthTotal.total, prevMonthSummary.total],
+            ["経費", monthTotal.expense, prevMonthSummary.expense],
+            ["粗利", monthTotal.profit, prevMonthSummary.profit],
+          ] as const
+        ).forEach(([label, now, prev]) => {
+          const change = pctChange(now, prev);
+          const row = monthSheet.addRow([label, Math.round(now), Math.round(prev), change != null ? Math.round(change) : ""]);
+          row.getCell(2).numFmt = '"¥"#,##0';
+          row.getCell(3).numFmt = '"¥"#,##0';
+          if (change != null) row.getCell(4).font = { color: { argb: change >= 0 ? GOLD : ROSE } };
+        });
+      }
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `YourManager_${businessDate}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
     }
@@ -523,6 +675,38 @@ export default function ReportPage() {
           <span className="text-gray-300 font-bold">粗利合計</span>
           <span className="text-right text-gold font-bold">{yen(monthTotal.profit)}</span>
         </div>
+
+        {prevMonthSummary && (
+          <div className="rounded-xl border border-line bg-elevated p-3 mb-2">
+            <div className="text-xs text-gray-500 mb-2">{prevMonthLabel}との比較</div>
+            <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
+              {(
+                [
+                  ["売上(税込)", monthTotal.total, prevMonthSummary.total],
+                  ["経費", monthTotal.expense, prevMonthSummary.expense],
+                  ["粗利", monthTotal.profit, prevMonthSummary.profit],
+                ] as const
+              ).map(([label, now, prev]) => {
+                const change = pctChange(now, prev);
+                return (
+                  <Fragment key={label}>
+                    <span className="text-gray-400">{label}</span>
+                    <span className="text-right">
+                      {yen(now)}
+                      {change != null && (
+                        <span className={change >= 0 ? "text-gold" : "text-rose"}>
+                          {" "}
+                          ({change >= 0 ? "+" : ""}
+                          {change.toFixed(0)}%)
+                        </span>
+                      )}
+                    </span>
+                  </Fragment>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <button
           onClick={() => setShowChart((v) => !v)}

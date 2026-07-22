@@ -189,6 +189,23 @@ create policy "authenticated users can delete their receipts"
   using (bucket_id = 'receipts');
 
 -- ============================================================
+-- インデックス（店舗数・データ量が増えても検索を高速に保つため）
+-- ============================================================
+
+-- my_store_ids()が全RLSポリシーの起点になるため、これが最重要
+create index if not exists idx_store_members_user_id on store_members(user_id);
+
+create index if not exists idx_staff_store_id on staff(store_id);
+create index if not exists idx_menu_items_store_id on menu_items(store_id);
+
+create index if not exists idx_tabs_store_business_date on tabs(store_id, business_date);
+create index if not exists idx_attendance_store_business_date on attendance(store_id, business_date);
+create index if not exists idx_expenses_store_business_date on expenses(store_id, business_date);
+
+-- tab_itemsはstore_idを持たないため、tabs経由のRLS/joinを速くする
+create index if not exists idx_tab_items_tab_id on tab_items(tab_id);
+
+-- ============================================================
 -- 初期データ：TEVERを1店舗目として登録
 -- ============================================================
 insert into stores (name) values ('BAR TEVER');
