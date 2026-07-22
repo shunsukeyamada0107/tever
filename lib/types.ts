@@ -165,10 +165,15 @@ export function tabColorFor(id: string): string {
 }
 
 // 営業日：指定した切り替え時刻より前は前日扱い（深夜0時をまたいでも同じ営業日として扱う）
+// ローカル日時のまま組み立てる（toISOString()はUTC変換されるため、日本時間の深夜0時〜切り替え時刻の間で
+// 余分に1日ズレてしまうバグがあった）
 export function businessDateFor(d: Date, cutoffHour: number = DEFAULT_BUSINESS_DAY_CUTOFF_HOUR): string {
   const dd = new Date(d);
   if (dd.getHours() < cutoffHour) dd.setDate(dd.getDate() - 1);
-  return dd.toISOString().slice(0, 10);
+  const y = dd.getFullYear();
+  const m = String(dd.getMonth() + 1).padStart(2, "0");
+  const day = String(dd.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // 出勤からの経過時間（時間単位）
