@@ -207,6 +207,35 @@ create index if not exists idx_expenses_store_business_date on expenses(store_id
 create index if not exists idx_tab_items_tab_id on tab_items(tab_id);
 
 -- ============================================================
+-- 自己サインアップ：新規ユーザー登録時に自動で店舗を作成
+-- auth.usersにレコードが作られたタイミングで発火し、
+-- サインアップ時に渡したstore_nameでstoresを作成、そのユーザーをownerとして紐付ける
+-- ============================================================
+create or replace function handle_new_user_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_store_id uuid;
+begin
+  insert into stores (name)
+  values (coalesce(new.raw_user_meta_data->>'store_name', '新しい店舗'))
+  returning id into new_store_id;
+
+  insert into store_members (store_id, user_id, role)
+  values (new_store_id, new.id, 'owner');
+
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user_signup();
+
+-- ============================================================
 -- 初期データ：TEVERを1店舗目として登録
 -- ============================================================
 insert into stores (name) values ('BAR TEVER');

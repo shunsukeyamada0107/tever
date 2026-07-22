@@ -61,7 +61,7 @@ export default function LoginPage() {
           {loading ? "ログイン中..." : "ログイン"}
         </button>
         <p className="text-xs text-gray-500">
-          ※ アカウントは店舗オーナーがSupabaseの管理画面から発行します（一般公開のサインアップは未実装）
+          ※ アカウントは運営がお店ごとに発行します
         </p>
       </form>
     </main>
