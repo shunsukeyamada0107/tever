@@ -21,6 +21,7 @@ import {
 } from "@/lib/types";
 import { generateInsights } from "@/lib/insights";
 import { MonthlySalesChart, ChartPoint } from "@/lib/MonthlySalesChart";
+import { DEFAULT_REPORT_TEMPLATE, renderReportTemplate } from "@/lib/reportTemplate";
 
 type DayRow = { date: string; tabCount: number; guestCount: number } & DaySummary;
 
@@ -46,7 +47,7 @@ function pctChange(now: number, prev: number): number | null {
 export default function ReportPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { storeId, storeName, taxRate, commissionRate } = useStore();
+  const { storeId, storeName, taxRate, commissionRate, reportTemplate } = useStore();
   const { date: businessDate } = useBusinessDate();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
   const prevMonthAnchor = new Date(`${monthStart}T12:00:00`);
@@ -275,62 +276,48 @@ export default function ReportPage() {
     const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
     const monthUnsettled = monthTabsRaw.filter((t) => !t.closed_at);
 
-    const dailyLines = [
-      `⚪日にち ${m}/${d}`,
-      `⚪売上 ${yen(summary.total)}`,
-      `⚪経費 ${yen(summary.expense)}`,
-      `⚪純利益${yen(summary.total - summary.expense)}`,
-      `⚪カード ${yen(summary.card)}`,
-      `⚪${tabRows.length}組男　人女　人（計${tabs.reduce((a, t) => a + (t.guest_count ?? 0), 0)}人）`,
-      `⚪メンション　件フォロー　件写真　件`,
-      `⚪ｸｰﾎﾟﾝ金　枚 銀　枚`,
-      `⚪ｸｰﾎﾟﾝ返ってきた枚数金　枚銀　枚`,
-      `50%OFFクーポン ${coupon50Today}枚`,
-      ``,
-      `⚪バイト時間`,
-      ...(hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${h.hours.toFixed(1)}h`) : ["　"]),
-      `⚪バイト人件費`,
-      ...(hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${yen(h.cost)}`) : ["　"]),
-      ``,
-      `⚪バック`,
-      ...(commission.length > 0
-        ? commission.map((c) => `${c.name} ${yen(c.commission)}（${yen(c.salesWithTax)}）`)
-        : ["　"]),
-    ];
+    const tokens: Record<string, string> = {
+      date: `${m}/${d}`,
+      sales: yen(summary.total),
+      expense: yen(summary.expense),
+      profit: yen(summary.total - summary.expense),
+      card: yen(summary.card),
+      tab_count: String(tabRows.length),
+      guest_count: String(tabs.reduce((a, t) => a + (t.guest_count ?? 0), 0)),
+      coupon50: String(coupon50Today),
+      hourly_hours:
+        hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${h.hours.toFixed(1)}h`).join("\n") : "　",
+      hourly_cost: hourlyLabor.length > 0 ? hourlyLabor.map((h) => `${h.name} ${yen(h.cost)}`).join("\n") : "　",
+      commission:
+        commission.length > 0
+          ? commission.map((c) => `${c.name} ${yen(c.commission)}（${yen(c.salesWithTax)}）`).join("\n")
+          : "　",
+      month_range: `${monM}/1〜${m}/${d}`,
+      month_num: String(m),
+      month_sales: yen(monthTotal.total),
+      month_expense: yen(monthTotal.expense),
+      month_profit: yen(monthTotal.total - monthTotal.expense),
+      month_card: yen(monthTotal.card),
+      month_tab_count: String(monthTotal.tabCount),
+      month_guest_count: String(monthTotal.guestCount),
+      month_coupon50: String(coupon50Month),
+      month_hourly:
+        monthHourlyLabor.length > 0
+          ? monthHourlyLabor.map((h) => `${h.name}  ${h.hours.toFixed(1)}h${yen(h.cost)}`).join("\n")
+          : "　",
+      month_commission:
+        monthCommission.length > 0
+          ? monthCommission.map((c) => `${c.name}${yen(c.commission)}（${yen(c.salesWithTax)}）`).join("\n")
+          : "　",
+      month_unsettled:
+        monthUnsettled.length > 0
+          ? monthUnsettled
+              .map((t) => `${t.name}${yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}`)
+              .join("\n")
+          : "　",
+    };
 
-    const monthlyLines = [
-      `日にち ${monM}/1〜${m}/${d}`,
-      `⚪売上 ${yen(monthTotal.total)}`,
-      `⚪経費　${yen(monthTotal.expense)}`,
-      `⚪純利益  ${yen(monthTotal.total - monthTotal.expense)}`,
-      `⚪家賃　¥`,
-      `⚪カラオケ¥`,
-      `⚪カード ${yen(monthTotal.card)}`,
-      `⚪PayPay¥`,
-      `⚪${monthTotal.tabCount}組計${monthTotal.guestCount}人`,
-      `⚪ｸｰﾎﾟﾝ金　枚銀　枚`,
-      `⚪ｸｰﾎﾟﾝ返ってきた枚数金　枚銀　枚`,
-      `50%OFFクーポン ${coupon50Month}枚`,
-      ``,
-      `⚪バイト時間&人件費`,
-      ...(monthHourlyLabor.length > 0
-        ? monthHourlyLabor.map((h) => `${h.name}  ${h.hours.toFixed(1)}h${yen(h.cost)}`)
-        : ["　"]),
-      ``,
-      `⚪バック`,
-      ...(monthCommission.length > 0
-        ? monthCommission.map((c) => `${c.name}${yen(c.commission)}（${yen(c.salesWithTax)}）`)
-        : ["　"]),
-      ``,
-      `${m}月未収`,
-      ...(monthUnsettled.length > 0
-        ? monthUnsettled.map(
-            (t) => `${t.name}${yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}`
-          )
-        : ["　"]),
-    ];
-
-    return `${dailyLines.join("\n")}\n\n\n${monthlyLines.join("\n")}`;
+    return renderReportTemplate(reportTemplate ?? DEFAULT_REPORT_TEMPLATE, tokens);
   }
 
   async function copyReportText() {

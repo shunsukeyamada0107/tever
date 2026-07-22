@@ -16,6 +16,7 @@ create table stores (
   tax_rate                  numeric not null default 0.10,  -- 消費税率（0.10=10%）
   commission_rate           numeric not null default 0.20,  -- 歩合率（0.20=20%）
   business_day_cutoff_hour  integer not null default 6,      -- 営業日の切り替え時刻（この時刻より前は前日扱い）
+  report_template           text,                            -- LINE報告レポートの自由テンプレート（未設定ならアプリ側の既定形式を使う）
   created_at                timestamptz not null default now()
 );
 

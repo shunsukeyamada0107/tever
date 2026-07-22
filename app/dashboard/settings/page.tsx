@@ -4,12 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { MenuItem, Staff } from "@/lib/types";
+import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 
 const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate, cutoffHour, reload } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, reload } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
@@ -21,12 +22,16 @@ export default function SettingsPage() {
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
+  const [templateDraft, setTemplateDraft] = useState(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [showTokenHelp, setShowTokenHelp] = useState(false);
 
   useEffect(() => {
     setTaxRateDraft(String(Math.round(taxRate * 100)));
     setCommissionRateDraft(String(Math.round(commissionRate * 100)));
     setCutoffHourDraft(String(cutoffHour));
-  }, [taxRate, commissionRate, cutoffHour]);
+    setTemplateDraft(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
+  }, [taxRate, commissionRate, cutoffHour, reportTemplate]);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -100,6 +105,18 @@ export default function SettingsPage() {
     reload();
   }
 
+  async function saveTemplate() {
+    if (!storeId) return;
+    setSavingTemplate(true);
+    await supabase.from("stores").update({ report_template: templateDraft }).eq("id", storeId);
+    setSavingTemplate(false);
+    reload();
+  }
+
+  function resetTemplate() {
+    setTemplateDraft(DEFAULT_REPORT_TEMPLATE);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -146,6 +163,52 @@ export default function SettingsPage() {
           >
             {savingStoreSettings ? "保存中..." : "保存する"}
           </button>
+        </div>
+      </div>
+
+      <div>
+        <div className="text-gold font-bold text-sm mb-2">LINE報告レポートのひな形</div>
+        <div className="rounded-xl border border-line bg-elevated p-3 space-y-2">
+          <div className="text-xs text-gray-500">
+            集計タブの「報告レポート」ボタンで生成される文章のひな形です。{"{{sales}}"}
+            のようなタグを好きな場所に入れて、自由に文言・並び順を変更できます。
+          </div>
+          <textarea
+            value={templateDraft}
+            onChange={(e) => setTemplateDraft(e.target.value)}
+            rows={14}
+            className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-xs font-mono whitespace-pre"
+          />
+          <button
+            onClick={() => setShowTokenHelp((v) => !v)}
+            className="text-xs text-gold"
+          >
+            {showTokenHelp ? "使えるタグを隠す" : "使えるタグ一覧を見る"}
+          </button>
+          {showTokenHelp && (
+            <div className="rounded-md bg-bg2 border border-line p-2 text-xs text-gray-400 space-y-0.5 max-h-48 overflow-y-auto">
+              {REPORT_TEMPLATE_TOKENS.map((t) => (
+                <div key={t.token}>
+                  <span className="text-gold font-mono">{`{{${t.token}}}`}</span> — {t.label}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={resetTemplate}
+              className="flex-1 rounded-md border border-line py-2 text-sm text-gray-300"
+            >
+              既定に戻す
+            </button>
+            <button
+              onClick={saveTemplate}
+              disabled={savingTemplate}
+              className="flex-1 rounded-md bg-gold text-bg py-2 text-sm font-bold disabled:opacity-50"
+            >
+              {savingTemplate ? "保存中..." : "保存する"}
+            </button>
+          </div>
         </div>
       </div>
 
