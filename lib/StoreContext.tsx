@@ -9,6 +9,7 @@ import {
   DEFAULT_DRINK_BACK_AMOUNT,
   CommissionScheme,
 } from "@/lib/types";
+import { StoreTheme } from "@/lib/theme";
 
 type StoreContextValue = {
   storeId: string | null;
@@ -21,6 +22,7 @@ type StoreContextValue = {
   accentColor: string;
   commissionScheme: CommissionScheme;
   drinkBackAmount: number;
+  theme: StoreTheme;
   loading: boolean;
   reload: () => void;
 };
@@ -38,6 +40,7 @@ const StoreContext = createContext<StoreContextValue>({
   accentColor: DEFAULT_ACCENT_COLOR,
   commissionScheme: "simple",
   drinkBackAmount: DEFAULT_DRINK_BACK_AMOUNT,
+  theme: "dark",
   loading: true,
   reload: () => {},
 });
@@ -54,6 +57,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [commissionScheme, setCommissionScheme] = useState<CommissionScheme>("simple");
   const [drinkBackAmount, setDrinkBackAmount] = useState(DEFAULT_DRINK_BACK_AMOUNT);
+  const [theme, setTheme] = useState<StoreTheme>("dark");
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -70,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: member } = await supabase
         .from("store_members")
         .select(
-          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount)"
+          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme)"
         )
         .eq("user_id", userData.user.id)
         .limit(1)
@@ -88,6 +92,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           accent_color: string | null;
           commission_scheme: CommissionScheme | null;
           drink_back_amount: number | null;
+          theme: StoreTheme | null;
         };
         const stores = member.stores as unknown as StoreRow | StoreRow[] | null;
         const store = Array.isArray(stores) ? stores[0] : stores;
@@ -100,6 +105,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setAccentColor(store?.accent_color ?? DEFAULT_ACCENT_COLOR);
         setCommissionScheme(store?.commission_scheme ?? "simple");
         setDrinkBackAmount(store?.drink_back_amount ?? DEFAULT_DRINK_BACK_AMOUNT);
+        setTheme(store?.theme ?? "dark");
       }
       setLoading(false);
     }
@@ -119,6 +125,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         accentColor,
         commissionScheme,
         drinkBackAmount,
+        theme,
         loading,
         reload,
       }}

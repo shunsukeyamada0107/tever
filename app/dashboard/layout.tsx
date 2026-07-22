@@ -6,6 +6,7 @@ import { StoreProvider, useStore } from "@/lib/StoreContext";
 import { BusinessDateProvider } from "@/lib/BusinessDateContext";
 import { createClient } from "@/lib/supabaseClient";
 import { hexToRgbTriplet } from "@/lib/types";
+import { THEME_PRESETS } from "@/lib/theme";
 
 const TABS = [
   { href: "/dashboard", label: "営業" },
@@ -15,10 +16,26 @@ const TABS = [
   { href: "/dashboard/settings", label: "設定" },
 ];
 
-// 店舗ごとのブランドカラーを、Tailwindの gold カラーが参照するCSS変数に反映する
-function AccentColorStyle() {
-  const { accentColor } = useStore();
-  return <style>{`:root { --gold-rgb: ${hexToRgbTriplet(accentColor)}; }`}</style>;
+// 店舗ごとのブランドカラー・テーマ（明/暗）を、CSS変数として:rootに反映する
+function ThemeStyle() {
+  const { accentColor, theme } = useStore();
+  const p = THEME_PRESETS[theme];
+  return (
+    <style>{`
+      :root {
+        --gold-rgb: ${hexToRgbTriplet(accentColor)};
+        --bg2-rgb: ${p.bg2};
+        --elevated-rgb: ${p.elevated};
+        --line-rgb: ${p.line};
+        --page-bg-rgb: ${p.pageBg};
+        --page-text-rgb: ${p.pageText};
+        --gray-200-rgb: ${p.gray200};
+        --gray-300-rgb: ${p.gray300};
+        --gray-400-rgb: ${p.gray400};
+        --gray-500-rgb: ${p.gray500};
+      }
+    `}</style>
+  );
 }
 
 function HeaderBar() {
@@ -49,7 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <StoreProvider>
       <BusinessDateProvider>
         <div className="min-h-screen pb-20">
-          <AccentColorStyle />
+          <ThemeStyle />
           <HeaderBar />
           <main className="p-4">{children}</main>
           <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
+import { StoreTheme } from "@/lib/theme";
 
 const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -20,6 +21,7 @@ export default function SettingsPage() {
     accentColor,
     commissionScheme,
     drinkBackAmount,
+    theme,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -37,6 +39,7 @@ export default function SettingsPage() {
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
   const [cashFloatDraft, setCashFloatDraft] = useState(String(cashFloatAmount));
   const [accentColorDraft, setAccentColorDraft] = useState(accentColor);
+  const [themeDraft, setThemeDraft] = useState<StoreTheme>(theme);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -53,6 +56,7 @@ export default function SettingsPage() {
     setAccentColorDraft(accentColor);
     setCommissionSchemeDraft(commissionScheme);
     setDrinkBackAmountDraft(String(drinkBackAmount));
+    setThemeDraft(theme);
   }, [
     taxRate,
     commissionRate,
@@ -62,6 +66,7 @@ export default function SettingsPage() {
     accentColor,
     commissionScheme,
     drinkBackAmount,
+    theme,
   ]);
 
   const loadData = useCallback(async () => {
@@ -165,6 +170,7 @@ export default function SettingsPage() {
         accent_color: accentColorDraft,
         commission_scheme: commissionSchemeDraft,
         drink_back_amount: Number(drinkBackAmountDraft) || 0,
+        theme: themeDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -273,6 +279,29 @@ export default function SettingsPage() {
                 className="w-10 h-9 rounded-md bg-bg2 border border-line p-0.5 cursor-pointer"
               />
               <span className="text-xs text-gray-400 font-mono">{accentColorDraft}</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">画面テーマ</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setThemeDraft("dark")}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  themeDraft === "dark" ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                🌙 ダーク
+              </button>
+              <button
+                type="button"
+                onClick={() => setThemeDraft("light")}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  themeDraft === "light" ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                ☀️ ライト（白背景）
+              </button>
             </div>
           </div>
           <button
