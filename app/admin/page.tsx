@@ -30,6 +30,8 @@ export default function AdminPage() {
   const [created, setCreated] = useState<{ storeName: string; ownerEmail: string; password: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [enteringId, setEnteringId] = useState<string | null>(null);
+  const [enterError, setEnterError] = useState<string | null>(null);
 
   async function loadStores() {
     setListError(null);
@@ -93,6 +95,27 @@ export default function AdminPage() {
     }
 
     loadStores();
+  }
+
+  async function handleEnter(store: StoreRow) {
+    const confirmed = window.confirm(
+      `「${store.name}」のオーナーとしてログインし直します。運営アカウントとしてのログインは切れます。よろしいですか？`
+    );
+    if (!confirmed) return;
+
+    setEnterError(null);
+    setEnteringId(store.id);
+
+    const res = await fetch(`/api/admin/stores/${store.id}/enter`, { method: "POST" });
+    const body = await res.json();
+
+    if (!res.ok) {
+      setEnteringId(null);
+      setEnterError(body.error ?? "入れませんでした。");
+      return;
+    }
+
+    window.location.href = body.url;
   }
 
   return (
@@ -167,6 +190,12 @@ export default function AdminPage() {
         <h2 className="text-sm font-bold text-gray-200">登録済みの店舗</h2>
         {listError && <p className="text-rose text-sm">{listError}</p>}
         {deleteError && <p className="text-rose text-sm">{deleteError}</p>}
+        {enterError && <p className="text-rose text-sm">{enterError}</p>}
+        {stores && stores.length > 0 && (
+          <p className="text-xs text-gray-500">
+            「入る」を押すとその店舗のオーナーとしてログインし直されます。運営アカウントに戻るには、一度ログアウトして自分のメールで再ログインしてください。
+          </p>
+        )}
         {!stores && !listError && <p className="text-xs text-gray-500">読み込み中...</p>}
         {stores && stores.length === 0 && <p className="text-xs text-gray-500">まだ店舗がありません。</p>}
         {stores && stores.length > 0 && (
@@ -179,13 +208,22 @@ export default function AdminPage() {
                     {new Date(s.created_at).toLocaleDateString("ja-JP")} ・ {s.plan}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(s)}
-                  disabled={deletingId === s.id}
-                  className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
-                >
-                  {deletingId === s.id ? "削除中..." : "削除"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEnter(s)}
+                    disabled={enteringId === s.id}
+                    className="text-xs text-gold border border-gold/50 rounded-md px-2 py-1 disabled:opacity-50"
+                  >
+                    {enteringId === s.id ? "移動中..." : "入る"}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(s)}
+                    disabled={deletingId === s.id}
+                    className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
+                  >
+                    {deletingId === s.id ? "削除中..." : "削除"}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
