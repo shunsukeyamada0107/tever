@@ -10,7 +10,7 @@ const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, reload } = useStore();
+  const { storeId, taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount, reload } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [menuName, setMenuName] = useState("");
@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
+  const [cashFloatDraft, setCashFloatDraft] = useState(String(cashFloatAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
   const [templateDraft, setTemplateDraft] = useState(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -33,7 +34,8 @@ export default function SettingsPage() {
     setCommissionRateDraft(String(Math.round(commissionRate * 100)));
     setCutoffHourDraft(String(cutoffHour));
     setTemplateDraft(reportTemplate ?? DEFAULT_REPORT_TEMPLATE);
-  }, [taxRate, commissionRate, cutoffHour, reportTemplate]);
+    setCashFloatDraft(String(cashFloatAmount));
+  }, [taxRate, commissionRate, cutoffHour, reportTemplate, cashFloatAmount]);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -125,6 +127,7 @@ export default function SettingsPage() {
         tax_rate: Number(taxRateDraft) / 100,
         commission_rate: Number(commissionRateDraft) / 100,
         business_day_cutoff_hour: Number(cutoffHourDraft),
+        cash_float_amount: Number(cashFloatDraft) || 0,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -181,6 +184,17 @@ export default function SettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              釣り銭元金（営業終了後に金庫に残す固定額）
+            </label>
+            <input
+              value={cashFloatDraft}
+              onChange={(e) => setCashFloatDraft(e.target.value)}
+              inputMode="numeric"
+              className="w-28 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
           </div>
           <button
             onClick={saveStoreSettings}
