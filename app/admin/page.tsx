@@ -28,6 +28,8 @@ export default function AdminPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ storeName: string; ownerEmail: string; password: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function loadStores() {
     setListError(null);
@@ -68,6 +70,28 @@ export default function AdminPage() {
     setStoreName("");
     setEmail("");
     setPassword(generatePassword());
+    loadStores();
+  }
+
+  async function handleDelete(store: StoreRow) {
+    const confirmed = window.confirm(
+      `「${store.name}」を完全に削除します。\n伝票・経費・スタッフなどの全データと、オーナーのログインアカウントも削除され、元に戻せません。\n本当に削除しますか？`
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setDeletingId(store.id);
+
+    const res = await fetch(`/api/admin/stores/${store.id}`, { method: "DELETE" });
+    const body = await res.json();
+
+    setDeletingId(null);
+
+    if (!res.ok) {
+      setDeleteError(body.error ?? "削除に失敗しました。");
+      return;
+    }
+
     loadStores();
   }
 
@@ -142,6 +166,7 @@ export default function AdminPage() {
       <div className="space-y-2">
         <h2 className="text-sm font-bold text-gray-200">登録済みの店舗</h2>
         {listError && <p className="text-rose text-sm">{listError}</p>}
+        {deleteError && <p className="text-rose text-sm">{deleteError}</p>}
         {!stores && !listError && <p className="text-xs text-gray-500">読み込み中...</p>}
         {stores && stores.length === 0 && <p className="text-xs text-gray-500">まだ店舗がありません。</p>}
         {stores && stores.length > 0 && (
@@ -154,6 +179,13 @@ export default function AdminPage() {
                     {new Date(s.created_at).toLocaleDateString("ja-JP")} ・ {s.plan}
                   </div>
                 </div>
+                <button
+                  onClick={() => handleDelete(s)}
+                  disabled={deletingId === s.id}
+                  className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
+                >
+                  {deletingId === s.id ? "削除中..." : "削除"}
+                </button>
               </li>
             ))}
           </ul>
