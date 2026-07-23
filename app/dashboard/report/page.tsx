@@ -12,6 +12,8 @@ import {
   Expense,
   TabWithItems,
   DaySummary,
+  HourlyLaborRow,
+  StaffCommission,
   tabSubtotal,
   tabTax,
   tabTotal,
@@ -42,6 +44,44 @@ function monthRange(d: Date) {
 function pctChange(now: number, prev: number): number | null {
   if (prev === 0) return null;
   return ((now - prev) / prev) * 100;
+}
+
+type LaborRow = {
+  staffId: string;
+  name: string;
+  hours: number | null;
+  wage: number | null;
+  hourlyCost: number | null;
+  commission: number | null;
+  salesBack: number | null;
+  drinkBack: number | null;
+  drinkCount: number | null;
+  total: number;
+};
+
+// 時給人件費と歩合給を人別にまとめる（両方持つ人はどちらも表示）
+function buildLaborRows(hourly: HourlyLaborRow[], comm: StaffCommission[], staffList: Staff[]): LaborRow[] {
+  const ids = Array.from(
+    new Set([...hourly.map((h) => h.staffId), ...comm.map((c) => c.staffId).filter((id): id is string => !!id)])
+  );
+  return ids
+    .map((id) => {
+      const h = hourly.find((x) => x.staffId === id) ?? null;
+      const c = comm.find((x) => x.staffId === id) ?? null;
+      return {
+        staffId: id,
+        name: h?.name ?? c?.name ?? "(元スタッフ)",
+        hours: h?.hours ?? null,
+        wage: staffList.find((s) => s.id === id)?.hourly_wage ?? null,
+        hourlyCost: h?.cost ?? null,
+        commission: c?.commission ?? null,
+        salesBack: c?.salesBack ?? null,
+        drinkBack: c?.drinkBack ?? null,
+        drinkCount: c?.drinkCount ?? null,
+        total: (h?.cost ?? 0) + (c?.commission ?? 0),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 }
 
 export default function ReportPage() {
@@ -255,6 +295,7 @@ export default function ReportPage() {
     isEligible
   );
   const hourlyLabor = hourlyLaborBreakdown(attendance, staffName);
+  const laborRows = buildLaborRows(hourlyLabor, commission, staff);
   const tabRows = [...tabs].sort(
     (a, b) => Number(!!a.closed_at) - Number(!!b.closed_at) || tabSubtotal(b.tab_items) - tabSubtotal(a.tab_items)
   );
@@ -295,6 +336,18 @@ export default function ReportPage() {
     }
   );
 
+  const monthCommission = staffCommissionBreakdown(
+    monthTabsRaw,
+    staffName,
+    taxRate,
+    commissionRate,
+    commissionScheme,
+    drinkBackAmount,
+    isEligible
+  );
+  const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
+  const monthLaborRows = buildLaborRows(monthHourlyLabor, monthCommission, staff);
+
   // 月間売上グラフ用：その月の1日〜末日まで欠けなく並べる（記録が無い日は0）
   function buildChartSeries(): ChartPoint[] {
     const [monthYear, monthNum] = monthStart.split("-").map(Number);
@@ -333,17 +386,6 @@ export default function ReportPage() {
 
     const coupon50Today = tabRows.filter((t) => t.discount_percent === 50).length;
     const coupon50Month = monthTabsRaw.filter((t) => t.discount_percent === 50).length;
-
-    const monthCommission = staffCommissionBreakdown(
-      monthTabsRaw,
-      staffName,
-      taxRate,
-      commissionRate,
-      commissionScheme,
-      drinkBackAmount,
-      isEligible
-    );
-    const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
     const monthUnsettled = monthTabsRaw.filter((t) => !t.closed_at);
 
     const tokens: Record<string, string> = {
@@ -621,15 +663,13 @@ export default function ReportPage() {
       </div>
 
       <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
-        <span className="text-gray-300 font-bold">総合売上（税込）</span>
-        <span className="text-right text-gold font-bold">{yen(summary.total)}</span>
-        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
-        <span className="text-gray-400 mt-2">人件費（歩合給+時給）</span>
-        <span className="text-right mt-2">{yen(summary.labor)}</span>
-        <span className="text-gray-400">経費</span>
-        <span className="text-right">{yen(summary.expense)}</span>
-        <span className="text-gray-300 font-bold">粗利</span>
-        <span className="text-right text-gold font-bold">{yen(summary.profit)}</span>
+        <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+        <span className="text-right text-gold font-bold">{yen(summary.total - summary.expense)}</span>
+        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
+          （消費税 {yen(summary.tax)} ・経費 −{yen(summary.expense)}）
+        </span>
+        <span className="text-gray-300 font-bold mt-2">粗利（人件費差引後）</span>
+        <span className="text-right text-gold font-bold mt-2">{yen(summary.profit)}</span>
         <span className="text-gray-400 mt-2">現金 / カード / 未会計</span>
         <span className="text-right mt-2">
           {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
@@ -652,22 +692,43 @@ export default function ReportPage() {
         </div>
       </div>
 
-      {hourlyLabor.length > 0 && (
-        <div>
-          <div className="text-gold font-bold text-sm mb-2">時給人件費（時給設定スタッフのみ）</div>
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-gold font-bold text-sm">人件費（人別）</div>
+          <div className="text-sm font-mono text-gold font-bold">計 {yen(summary.labor)}</div>
+        </div>
+        {laborRows.length === 0 ? (
+          <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+            対象者がいません
+          </div>
+        ) : (
           <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-            {hourlyLabor.map((h) => (
-              <div key={h.staffId} className="flex justify-between items-center px-3 py-2 text-sm">
-                <span className="text-gray-300">
-                  {h.name}
-                  <span className="text-xs text-gray-500"> ・{h.hours.toFixed(1)}h</span>
-                </span>
-                <span className="font-mono text-gray-400">{yen(h.cost)}</span>
+            {laborRows.map((r) => (
+              <div key={r.staffId} className="px-3 py-2 text-sm space-y-0.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300 font-bold">{r.name}</span>
+                  <span className="font-mono text-gold font-bold">{yen(r.total)}</span>
+                </div>
+                {r.hours != null && (
+                  <div className="text-xs text-gray-400">
+                    時間 {r.hours.toFixed(1)}h ・ 時給 {r.wage != null ? yen(r.wage) : "未設定"} ・ 人件費{" "}
+                    {yen(r.hourlyCost ?? 0)}
+                  </div>
+                )}
+                {r.commission != null &&
+                  (commissionScheme === "drink_back" ? (
+                    <div className="text-xs text-gray-400">
+                      売上バック {yen(r.salesBack ?? 0)} ・ 🍾ドリンクバック {yen(r.drinkBack ?? 0)}（{r.drinkCount ?? 0}
+                      杯）
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400">売上（歩合給） {yen(r.commission)}</div>
+                  ))}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {showInsights && insights.length > 0 && (
         <div>
@@ -713,47 +774,56 @@ export default function ReportPage() {
         )}
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">スタッフ別歩合給</div>
-        {commission.length === 0 ? (
-          <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
-            会計済みの伝票がまだありません
-          </div>
-        ) : (
-          <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-            {commission.map((c) => (
-              <div key={c.staffId ?? "unassigned"} className="px-3 py-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">{c.name}</span>
-                  <span className="font-mono text-gray-400">
-                    {yen(c.commission)}
-                    <span className="text-gray-500"> （{yen(c.salesWithTax)}）</span>
-                  </span>
-                </div>
-                {commissionScheme === "drink_back" && (
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    売上バック {yen(c.salesBack)} ・ 🍾ドリンクバック {yen(c.drinkBack)}（{c.drinkCount}杯）
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
       </div>
 
       <div className="rounded-2xl bg-[#6FB3E0]/10 border border-[#6FB3E0]/30 p-3 space-y-4">
         <div className="text-[#6FB3E0] font-bold text-sm mb-2">🗓️ 今月サマリー（{monthLabel}）</div>
         <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
-          <span className="text-gray-300 font-bold">総合売上（税込）</span>
-          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total)}</span>
-          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
-          <span className="text-gray-400 mt-2">人件費合計（歩合給+時給）</span>
-          <span className="text-right mt-2">{yen(monthTotal.labor)}</span>
-          <span className="text-gray-400">経費合計</span>
-          <span className="text-right">{yen(monthTotal.expense)}</span>
-          <span className="text-gray-300 font-bold">粗利合計</span>
-          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.profit)}</span>
+          <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total - monthTotal.expense)}</span>
+          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
+            （消費税 {yen(monthTotal.tax)} ・経費 −{yen(monthTotal.expense)}）
+          </span>
+          <span className="text-gray-300 font-bold mt-2">粗利合計（人件費差引後）</span>
+          <span className="text-right text-[#6FB3E0] font-bold mt-2">{yen(monthTotal.profit)}</span>
+        </div>
+
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-[#6FB3E0] font-bold text-sm">人件費（人別・今月）</div>
+            <div className="text-sm font-mono text-[#6FB3E0] font-bold">計 {yen(monthTotal.labor)}</div>
+          </div>
+          {monthLaborRows.length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+              対象者がいません
+            </div>
+          ) : (
+            <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+              {monthLaborRows.map((r) => (
+                <div key={r.staffId} className="px-3 py-2 text-sm space-y-0.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-300 font-bold">{r.name}</span>
+                    <span className="font-mono text-[#6FB3E0] font-bold">{yen(r.total)}</span>
+                  </div>
+                  {r.hours != null && (
+                    <div className="text-xs text-gray-400">
+                      時間 {r.hours.toFixed(1)}h ・ 時給 {r.wage != null ? yen(r.wage) : "未設定"} ・ 人件費{" "}
+                      {yen(r.hourlyCost ?? 0)}
+                    </div>
+                  )}
+                  {r.commission != null &&
+                    (commissionScheme === "drink_back" ? (
+                      <div className="text-xs text-gray-400">
+                        売上バック {yen(r.salesBack ?? 0)} ・ 🍾ドリンクバック {yen(r.drinkBack ?? 0)}（
+                        {r.drinkCount ?? 0}杯）
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400">売上（歩合給） {yen(r.commission)}</div>
+                    ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {prevMonthSummary && (
@@ -802,17 +872,15 @@ export default function ReportPage() {
               <div className="mt-3 pt-3 border-t border-dashed border-line">
                 {selectedChartRow ? (
                   <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
-                    <span className="text-gray-300 font-bold">総合売上（税込）</span>
-                    <span className="text-right text-[#6FB3E0] font-bold">{yen(selectedChartRow.total)}</span>
-                    <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
-                      （消費税 {yen(selectedChartRow.tax)}）
+                    <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+                    <span className="text-right text-[#6FB3E0] font-bold">
+                      {yen(selectedChartRow.total - selectedChartRow.expense)}
                     </span>
-                    <span className="text-gray-400 mt-2">人件費（歩合給+時給）</span>
-                    <span className="text-right mt-2">{yen(selectedChartRow.labor)}</span>
-                    <span className="text-gray-400">経費</span>
-                    <span className="text-right">{yen(selectedChartRow.expense)}</span>
-                    <span className="text-gray-300 font-bold">粗利</span>
-                    <span className="text-right text-[#6FB3E0] font-bold">{yen(selectedChartRow.profit)}</span>
+                    <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
+                      （消費税 {yen(selectedChartRow.tax)} ・経費 −{yen(selectedChartRow.expense)}）
+                    </span>
+                    <span className="text-gray-300 font-bold mt-2">粗利（人件費差引後）</span>
+                    <span className="text-right text-[#6FB3E0] font-bold mt-2">{yen(selectedChartRow.profit)}</span>
                   </div>
                 ) : (
                   <div className="text-xs text-gray-500 text-center">この日の記録はありません</div>
