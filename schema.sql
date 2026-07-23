@@ -22,6 +22,7 @@ create table stores (
   cash_float_amount         numeric not null default 0,      -- 釣り銭元金（営業終了後に金庫に残す固定額）
   accent_color              text not null default '#DCA84E', -- 店舗ごとのブランドカラー（アプリのゴールド部分に反映）
   theme                     text not null default 'dark' check (theme in ('dark','light')), -- 店舗ごとの画面テーマ
+  show_insights             boolean not null default true, -- 集計タブの「気づき」セクションを表示するか
   created_at                timestamptz not null default now()
 );
 

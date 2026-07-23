@@ -22,6 +22,7 @@ export default function SettingsPage() {
     commissionScheme,
     drinkBackAmount,
     theme,
+    showInsights,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -42,6 +43,7 @@ export default function SettingsPage() {
   const [cashFloatDraft, setCashFloatDraft] = useState(String(cashFloatAmount));
   const [accentColorDraft, setAccentColorDraft] = useState(accentColor);
   const [themeDraft, setThemeDraft] = useState<StoreTheme>(theme);
+  const [showInsightsDraft, setShowInsightsDraft] = useState(showInsights);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -59,6 +61,7 @@ export default function SettingsPage() {
     setCommissionSchemeDraft(commissionScheme);
     setDrinkBackAmountDraft(String(drinkBackAmount));
     setThemeDraft(theme);
+    setShowInsightsDraft(showInsights);
   }, [
     taxRate,
     commissionRate,
@@ -69,6 +72,7 @@ export default function SettingsPage() {
     commissionScheme,
     drinkBackAmount,
     theme,
+    showInsights,
   ]);
 
   const loadData = useCallback(async () => {
@@ -191,6 +195,7 @@ export default function SettingsPage() {
         commission_scheme: commissionSchemeDraft,
         drink_back_amount: Number(drinkBackAmountDraft) || 0,
         theme: themeDraft,
+        show_insights: showInsightsDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -357,6 +362,29 @@ export default function SettingsPage() {
                 }`}
               >
                 ☀️ ライト（白背景）
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">集計タブの「気づき」</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowInsightsDraft(true)}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  showInsightsDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                ON
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInsightsDraft(false)}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  !showInsightsDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                OFF
               </button>
             </div>
           </div>

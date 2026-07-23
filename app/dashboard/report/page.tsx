@@ -47,8 +47,17 @@ function pctChange(now: number, prev: number): number | null {
 export default function ReportPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { storeId, storeName, taxRate, commissionRate, reportTemplate, cashFloatAmount, commissionScheme, drinkBackAmount } =
-    useStore();
+  const {
+    storeId,
+    storeName,
+    taxRate,
+    commissionRate,
+    reportTemplate,
+    cashFloatAmount,
+    commissionScheme,
+    drinkBackAmount,
+    showInsights,
+  } = useStore();
   const { date: businessDate } = useBusinessDate();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
   const prevMonthAnchor = new Date(`${monthStart}T12:00:00`);
@@ -659,7 +668,7 @@ export default function ReportPage() {
         </div>
       )}
 
-      {insights.length > 0 && (
+      {showInsights && insights.length > 0 && (
         <div>
           <div className="text-gold font-bold text-sm mb-2">気づき</div>
           <div className="rounded-xl border border-line bg-elevated divide-y divide-line">

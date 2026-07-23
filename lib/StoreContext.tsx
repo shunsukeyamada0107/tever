@@ -23,6 +23,7 @@ type StoreContextValue = {
   commissionScheme: CommissionScheme;
   drinkBackAmount: number;
   theme: StoreTheme;
+  showInsights: boolean;
   loading: boolean;
   reload: () => void;
 };
@@ -41,6 +42,7 @@ const StoreContext = createContext<StoreContextValue>({
   commissionScheme: "simple",
   drinkBackAmount: DEFAULT_DRINK_BACK_AMOUNT,
   theme: "dark",
+  showInsights: true,
   loading: true,
   reload: () => {},
 });
@@ -58,6 +60,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [commissionScheme, setCommissionScheme] = useState<CommissionScheme>("simple");
   const [drinkBackAmount, setDrinkBackAmount] = useState(DEFAULT_DRINK_BACK_AMOUNT);
   const [theme, setTheme] = useState<StoreTheme>("dark");
+  const [showInsights, setShowInsights] = useState(true);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -74,7 +77,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: member } = await supabase
         .from("store_members")
         .select(
-          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme)"
+          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme, show_insights)"
         )
         .eq("user_id", userData.user.id)
         .limit(1)
@@ -93,6 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           commission_scheme: CommissionScheme | null;
           drink_back_amount: number | null;
           theme: StoreTheme | null;
+          show_insights: boolean | null;
         };
         const stores = member.stores as unknown as StoreRow | StoreRow[] | null;
         const store = Array.isArray(stores) ? stores[0] : stores;
@@ -106,6 +110,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setCommissionScheme(store?.commission_scheme ?? "simple");
         setDrinkBackAmount(store?.drink_back_amount ?? DEFAULT_DRINK_BACK_AMOUNT);
         setTheme(store?.theme ?? "dark");
+        setShowInsights(store?.show_insights ?? true);
       }
       setLoading(false);
     }
@@ -126,6 +131,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         commissionScheme,
         drinkBackAmount,
         theme,
+        showInsights,
         loading,
         reload,
       }}
