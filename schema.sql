@@ -42,12 +42,13 @@ create table store_members (
 -- 3. スタッフ（勤怠・歩合の対象。ログインアカウントとは別概念）
 -- ------------------------------------------------------------
 create table staff (
-  id            uuid primary key default gen_random_uuid(),
-  store_id      uuid not null references stores(id) on delete cascade,
-  name          text not null,
-  hourly_wage   numeric,           -- null = 時給未設定
-  active        boolean not null default true,
-  created_at    timestamptz not null default now()
+  id                  uuid primary key default gen_random_uuid(),
+  store_id            uuid not null references stores(id) on delete cascade,
+  name                text not null,
+  hourly_wage         numeric,           -- null = 時給未設定
+  active              boolean not null default true,
+  commission_eligible boolean not null default true, -- false = 歩合の対象外（伝票を担当してもその分は歩合計算に含めない）
+  created_at          timestamptz not null default now()
 );
 
 -- ------------------------------------------------------------

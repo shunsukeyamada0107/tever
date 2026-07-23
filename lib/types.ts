@@ -4,6 +4,7 @@ export type Staff = {
   name: string;
   hourly_wage: number | null;
   active: boolean;
+  commission_eligible: boolean;
 };
 
 export type MenuItem = {
@@ -231,7 +232,8 @@ export function staffCommissionBreakdown(
   taxRate: number = DEFAULT_TAX_RATE,
   commissionRate: number = DEFAULT_COMMISSION_RATE,
   scheme: CommissionScheme = "simple",
-  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT
+  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT,
+  isCommissionEligible: (staffId: string) => boolean = () => true
 ): StaffCommission[] {
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
@@ -243,13 +245,13 @@ export function staffCommissionBreakdown(
     const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
     const discountFactor = taxableSubtotal / sub;
 
-    // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定なら店舗の客扱いで対象外）
+    // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定・歩合対象外は集計しない）
     const byStaff: Record<string, number> = {};
     const byStaffDrink: Record<string, number> = {};
     const byStaffDrinkQty: Record<string, number> = {};
     t.tab_items.forEach((i) => {
       const effectiveStaffId = i.staff_id ?? t.staff_id;
-      if (!effectiveStaffId) return;
+      if (!effectiveStaffId || !isCommissionEligible(effectiveStaffId)) return;
       byStaff[effectiveStaffId] = (byStaff[effectiveStaffId] ?? 0) + itemSubtotal(i);
       if (i.is_cast_drink) {
         byStaffDrink[effectiveStaffId] = (byStaffDrink[effectiveStaffId] ?? 0) + itemSubtotal(i);
@@ -319,7 +321,8 @@ export function daySummary(
   taxRate: number = DEFAULT_TAX_RATE,
   commissionRate: number = DEFAULT_COMMISSION_RATE,
   commissionScheme: CommissionScheme = "simple",
-  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT
+  drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT,
+  isCommissionEligible: (staffId: string) => boolean = () => true
 ): DaySummary {
   const subtotal = tabs.reduce(
     (a, t) => a + tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount),
@@ -333,7 +336,8 @@ export function daySummary(
     taxRate,
     commissionRate,
     commissionScheme,
-    drinkBackAmount
+    drinkBackAmount,
+    isCommissionEligible
   ).reduce(
     (a, c) => a + c.commission,
     0

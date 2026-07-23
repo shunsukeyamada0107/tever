@@ -154,6 +154,7 @@ export default function ReportPage() {
       const s = (staffData ?? []).find((x) => x.id === staffId);
       return s ? s.name : "(元スタッフ)";
     };
+    const isEligibleOf = (staffId: string) => (staffData ?? []).find((x) => x.id === staffId)?.commission_eligible ?? true;
 
     const rows: DayRow[] = Array.from(dates)
       .sort()
@@ -167,7 +168,17 @@ export default function ReportPage() {
           date,
           tabCount,
           guestCount,
-          ...daySummary(dTabs, dAtt, dExp, staffNameOf, taxRate, commissionRate, commissionScheme, drinkBackAmount),
+          ...daySummary(
+            dTabs,
+            dAtt,
+            dExp,
+            staffNameOf,
+            taxRate,
+            commissionRate,
+            commissionScheme,
+            drinkBackAmount,
+            isEligibleOf
+          ),
         };
       });
     setMonthRows(rows);
@@ -183,7 +194,8 @@ export default function ReportPage() {
         taxRate,
         commissionRate,
         commissionScheme,
-        drinkBackAmount
+        drinkBackAmount,
+        isEligibleOf
       )
     );
   }, [
@@ -209,8 +221,30 @@ export default function ReportPage() {
     return s ? s.name : "(元スタッフ)";
   }
 
-  const summary = daySummary(tabs, attendance, expenses, staffName, taxRate, commissionRate, commissionScheme, drinkBackAmount);
-  const commission = staffCommissionBreakdown(tabs, staffName, taxRate, commissionRate, commissionScheme, drinkBackAmount);
+  function isEligible(staffId: string) {
+    return staff.find((x) => x.id === staffId)?.commission_eligible ?? true;
+  }
+
+  const summary = daySummary(
+    tabs,
+    attendance,
+    expenses,
+    staffName,
+    taxRate,
+    commissionRate,
+    commissionScheme,
+    drinkBackAmount,
+    isEligible
+  );
+  const commission = staffCommissionBreakdown(
+    tabs,
+    staffName,
+    taxRate,
+    commissionRate,
+    commissionScheme,
+    drinkBackAmount,
+    isEligible
+  );
   const hourlyLabor = hourlyLaborBreakdown(attendance, staffName);
   const tabRows = [...tabs].sort(
     (a, b) => Number(!!a.closed_at) - Number(!!b.closed_at) || tabSubtotal(b.tab_items) - tabSubtotal(a.tab_items)
@@ -297,7 +331,8 @@ export default function ReportPage() {
       taxRate,
       commissionRate,
       commissionScheme,
-      drinkBackAmount
+      drinkBackAmount,
+      isEligible
     );
     const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
     const monthUnsettled = monthTabsRaw.filter((t) => !t.closed_at);

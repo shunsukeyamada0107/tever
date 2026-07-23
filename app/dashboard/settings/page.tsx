@@ -157,6 +157,11 @@ export default function SettingsPage() {
     loadData();
   }
 
+  async function toggleCommissionEligible(s: Staff) {
+    await supabase.from("staff").update({ commission_eligible: !s.commission_eligible }).eq("id", s.id);
+    loadData();
+  }
+
   async function saveStoreSettings() {
     if (!storeId) return;
     setSavingStoreSettings(true);
@@ -187,6 +192,42 @@ export default function SettingsPage() {
 
   function resetTemplate() {
     setTemplateDraft(DEFAULT_REPORT_TEMPLATE);
+  }
+
+  const eligibleStaff = staff.filter((s) => s.commission_eligible);
+  const ineligibleStaff = staff.filter((s) => !s.commission_eligible);
+
+  function renderStaffRow(s: Staff) {
+    return (
+      <div key={s.id} className="flex justify-between items-center px-3 py-2 text-sm gap-2">
+        <span className="text-gray-300 shrink-0">{s.name}</span>
+        <input
+          value={wageDrafts[s.id] ?? ""}
+          onChange={(e) => setWageDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
+          placeholder="時給(任意)"
+          inputMode="numeric"
+          className="w-24 rounded-md bg-bg2 border border-line px-2 py-1 text-sm"
+        />
+        <button
+          onClick={() => saveWage(s.id)}
+          disabled={(wageDrafts[s.id] ?? "") === (s.hourly_wage != null ? String(s.hourly_wage) : "")}
+          className="text-xs rounded-md border border-line px-2 py-1 text-gray-300 disabled:opacity-40 shrink-0"
+        >
+          保存
+        </button>
+        <button
+          onClick={() => toggleCommissionEligible(s)}
+          className={`text-xs rounded-md border px-2 py-1 shrink-0 ${
+            s.commission_eligible ? "border-gold text-gold bg-gold/10" : "border-line text-gray-500"
+          }`}
+        >
+          {s.commission_eligible ? "💰歩合対象" : "対象外"}
+        </button>
+        <button onClick={() => removeStaff(s.id)} className="text-rose text-xs shrink-0">
+          削除
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -464,35 +505,40 @@ export default function SettingsPage() {
 
       <div>
         <div className="text-gold font-bold text-sm mb-2">スタッフ管理</div>
-        <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-          {staff.length === 0 && (
+        {staff.length === 0 ? (
+          <div className="rounded-xl border border-line bg-elevated">
             <div className="text-sm text-gray-500 text-center py-6">
               スタッフが未登録です（「スタッフ」タブから追加できます）
             </div>
-          )}
-          {staff.map((s) => (
-            <div key={s.id} className="flex justify-between items-center px-3 py-2 text-sm gap-2">
-              <span className="text-gray-300 shrink-0">{s.name}</span>
-              <input
-                value={wageDrafts[s.id] ?? ""}
-                onChange={(e) => setWageDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
-                placeholder="時給(任意)"
-                inputMode="numeric"
-                className="w-24 rounded-md bg-bg2 border border-line px-2 py-1 text-sm"
-              />
-              <button
-                onClick={() => saveWage(s.id)}
-                disabled={(wageDrafts[s.id] ?? "") === (s.hourly_wage != null ? String(s.hourly_wage) : "")}
-                className="text-xs rounded-md border border-line px-2 py-1 text-gray-300 disabled:opacity-40 shrink-0"
-              >
-                保存
-              </button>
-              <button onClick={() => removeStaff(s.id)} className="text-rose text-xs shrink-0">
-                削除
-              </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs text-gray-500 mb-1">💰 歩合対象スタッフ</div>
+              {eligibleStaff.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-line text-xs text-gray-500 text-center py-4">
+                  いません
+                </div>
+              ) : (
+                <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+                  {eligibleStaff.map(renderStaffRow)}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">歩合対象外スタッフ（時給のみ）</div>
+              {ineligibleStaff.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-line text-xs text-gray-500 text-center py-4">
+                  いません
+                </div>
+              ) : (
+                <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+                  {ineligibleStaff.map(renderStaffRow)}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
