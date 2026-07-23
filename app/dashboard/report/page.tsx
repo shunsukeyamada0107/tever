@@ -608,6 +608,7 @@ export default function ReportPage() {
   return (
     <div className="space-y-6">
       <DateBar />
+      <div className="rounded-2xl bg-gold/10 border border-gold/30 p-3 space-y-4">
       <div className="flex justify-between items-center">
         <div className="text-gold font-bold text-sm">📅 {isToday ? "本日" : businessDate}の売上</div>
         <button
@@ -739,8 +740,9 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+      </div>
 
-      <div>
+      <div className="rounded-2xl bg-[#6FB3E0]/10 border border-[#6FB3E0]/30 p-3 space-y-4">
         <div className="text-[#6FB3E0] font-bold text-sm mb-2">🗓️ 今月サマリー（{monthLabel}）</div>
         <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
           <span className="text-gray-300 font-bold">総合売上（税込）</span>
