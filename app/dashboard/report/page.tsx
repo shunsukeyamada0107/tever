@@ -663,13 +663,13 @@ export default function ReportPage() {
       </div>
 
       <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
-        <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+        <span className="text-gray-400">売上（税込）</span>
+        <span className="text-right">{yen(summary.total)}</span>
+        <span className="text-gray-400">経費</span>
+        <span className="text-right">−{yen(summary.expense)}</span>
+        <span className="text-gray-300 font-bold">売上－経費</span>
         <span className="text-right text-gold font-bold">{yen(summary.total - summary.expense)}</span>
-        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
-          （消費税 {yen(summary.tax)} ・経費 −{yen(summary.expense)}）
-        </span>
-        <span className="text-gray-300 font-bold mt-2">粗利（人件費差引後）</span>
-        <span className="text-right text-gold font-bold mt-2">{yen(summary.profit)}</span>
+        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
         <span className="text-gray-400 mt-2">現金 / カード / 未会計</span>
         <span className="text-right mt-2">
           {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
@@ -730,6 +730,11 @@ export default function ReportPage() {
         )}
       </div>
 
+      <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 flex justify-between items-center text-sm font-mono">
+        <span className="text-gray-300 font-bold">粗利（売上－経費－人件費）</span>
+        <span className="text-right text-gold font-bold text-base">{yen(summary.profit)}</span>
+      </div>
+
       {showInsights && insights.length > 0 && (
         <div>
           <div className="text-gold font-bold text-sm mb-2">気づき</div>
@@ -779,13 +784,13 @@ export default function ReportPage() {
       <div className="rounded-2xl bg-[#6FB3E0]/10 border border-[#6FB3E0]/30 p-3 space-y-4">
         <div className="text-[#6FB3E0] font-bold text-sm mb-2">🗓️ 今月サマリー（{monthLabel}）</div>
         <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
-          <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+          <span className="text-gray-400">売上（税込）</span>
+          <span className="text-right">{yen(monthTotal.total)}</span>
+          <span className="text-gray-400">経費</span>
+          <span className="text-right">−{yen(monthTotal.expense)}</span>
+          <span className="text-gray-300 font-bold">売上－経費</span>
           <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total - monthTotal.expense)}</span>
-          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
-            （消費税 {yen(monthTotal.tax)} ・経費 −{yen(monthTotal.expense)}）
-          </span>
-          <span className="text-gray-300 font-bold mt-2">粗利合計（人件費差引後）</span>
-          <span className="text-right text-[#6FB3E0] font-bold mt-2">{yen(monthTotal.profit)}</span>
+          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
         </div>
 
         <div>
@@ -824,6 +829,11 @@ export default function ReportPage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 flex justify-between items-center text-sm font-mono">
+          <span className="text-gray-300 font-bold">粗利合計（売上－経費－人件費）</span>
+          <span className="text-right text-[#6FB3E0] font-bold text-base">{yen(monthTotal.profit)}</span>
         </div>
 
         {prevMonthSummary && (
@@ -872,14 +882,18 @@ export default function ReportPage() {
               <div className="mt-3 pt-3 border-t border-dashed border-line">
                 {selectedChartRow ? (
                   <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
-                    <span className="text-gray-300 font-bold">総合売上（税込・経費差引後）</span>
+                    <span className="text-gray-400">売上（税込）</span>
+                    <span className="text-right">{yen(selectedChartRow.total)}</span>
+                    <span className="text-gray-400">経費</span>
+                    <span className="text-right">−{yen(selectedChartRow.expense)}</span>
+                    <span className="text-gray-300 font-bold">売上－経費</span>
                     <span className="text-right text-[#6FB3E0] font-bold">
                       {yen(selectedChartRow.total - selectedChartRow.expense)}
                     </span>
                     <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
-                      （消費税 {yen(selectedChartRow.tax)} ・経費 −{yen(selectedChartRow.expense)}）
+                      （消費税 {yen(selectedChartRow.tax)}）
                     </span>
-                    <span className="text-gray-300 font-bold mt-2">粗利（人件費差引後）</span>
+                    <span className="text-gray-300 font-bold mt-2">粗利（売上－経費－人件費）</span>
                     <span className="text-right text-[#6FB3E0] font-bold mt-2">{yen(selectedChartRow.profit)}</span>
                   </div>
                 ) : (
