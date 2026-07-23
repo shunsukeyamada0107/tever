@@ -31,6 +31,8 @@ export default function SettingsPage() {
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
   const [menuIsCastDrink, setMenuIsCastDrink] = useState(false);
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
+  const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffWage, setNewStaffWage] = useState("");
   const [menuNameDrafts, setMenuNameDrafts] = useState<Record<string, string>>({});
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
@@ -159,6 +161,19 @@ export default function SettingsPage() {
 
   async function toggleCommissionEligible(s: Staff) {
     await supabase.from("staff").update({ commission_eligible: !s.commission_eligible }).eq("id", s.id);
+    loadData();
+  }
+
+  async function addStaff() {
+    if (!storeId || !newStaffName.trim()) return;
+    const wage = newStaffWage.trim() === "" ? null : Number(newStaffWage);
+    await supabase.from("staff").insert({
+      store_id: storeId,
+      name: newStaffName.trim(),
+      hourly_wage: wage,
+    });
+    setNewStaffName("");
+    setNewStaffWage("");
     loadData();
   }
 
@@ -539,6 +554,27 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+        <div className="mt-2 rounded-xl border border-dashed border-line p-3 flex gap-2">
+          <input
+            value={newStaffName}
+            onChange={(e) => setNewStaffName(e.target.value)}
+            placeholder="スタッフ名"
+            className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+          />
+          <input
+            value={newStaffWage}
+            onChange={(e) => setNewStaffWage(e.target.value)}
+            placeholder="時給(任意)"
+            inputMode="numeric"
+            className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+          />
+          <button
+            onClick={addStaff}
+            className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
+          >
+            ＋ 追加
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -5,11 +5,11 @@ import { createClient } from "@/lib/supabaseClient";
 import { useStore } from "@/lib/StoreContext";
 import { useBusinessDate } from "@/lib/BusinessDateContext";
 import { DateBar } from "@/lib/DateBar";
-import { Expense, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, EXPENSE_CATEGORY_COLORS } from "@/lib/types";
+import { Expense, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, EXPENSE_CATEGORY_COLORS, Staff, Attendance, attHours } from "@/lib/types";
 
 export default function ExpensesPage() {
   const supabase = createClient();
-  const { storeId } = useStore();
+  const { storeId, cutoffHour } = useStore();
   const { date: businessDate } = useBusinessDate();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
@@ -20,6 +20,13 @@ export default function ExpensesPage() {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [hourlyStaff, setHourlyStaff] = useState<Staff[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [attStaffId, setAttStaffId] = useState("");
+  const [attStart, setAttStart] = useState("");
+  const [attEnd, setAttEnd] = useState("");
+  const [attError, setAttError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     if (!storeId) return;
     const { data } = await supabase
@@ -29,11 +36,83 @@ export default function ExpensesPage() {
       .eq("business_date", businessDate)
       .order("created_at", { ascending: false });
     setExpenses(data ?? []);
+
+    const { data: staffData } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("store_id", storeId)
+      .eq("active", true)
+      .not("hourly_wage", "is", null)
+      .order("created_at", { ascending: true });
+    setHourlyStaff(staffData ?? []);
+
+    const { data: attData } = await supabase
+      .from("attendance")
+      .select("*")
+      .eq("store_id", storeId)
+      .eq("business_date", businessDate)
+      .order("clock_in", { ascending: true });
+    setAttendance(attData ?? []);
   }, [storeId, businessDate]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // 「HH:MM」を、営業日の切り替え時刻を基準に実際のカレンダー日時へ変換する
+  // （切り替え時刻より前の時刻＝日付をまたいだ後の時間として扱う。例：切り替え6時なら、深夜1時は翌カレンダー日）
+  function timeToDate(hhmm: string): Date | null {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    const d = new Date(`${businessDate}T00:00:00`);
+    if (h < cutoffHour) d.setDate(d.getDate() + 1);
+    d.setHours(h, min, 0, 0);
+    return d;
+  }
+
+  function staffName(staffId: string | null) {
+    if (!staffId) return "未設定";
+    const s = hourlyStaff.find((x) => x.id === staffId);
+    return s ? s.name : "(元スタッフ)";
+  }
+
+  async function addAttendance() {
+    setAttError(null);
+    if (!storeId || !attStaffId || !attStart.trim() || !attEnd.trim()) return;
+    const s = hourlyStaff.find((x) => x.id === attStaffId);
+    if (!s) return;
+
+    const clockIn = timeToDate(attStart);
+    const clockOut = timeToDate(attEnd);
+    if (!clockIn || !clockOut) {
+      setAttError("時刻の形式が正しくありません。");
+      return;
+    }
+    if (clockOut <= clockIn) {
+      setAttError("終了時刻は開始時刻より後にしてください。");
+      return;
+    }
+
+    await supabase.from("attendance").insert({
+      store_id: storeId,
+      staff_id: s.id,
+      business_date: businessDate,
+      clock_in: clockIn.toISOString(),
+      clock_out: clockOut.toISOString(),
+      wage_snapshot: s.hourly_wage,
+    });
+    setAttStaffId("");
+    setAttStart("");
+    setAttEnd("");
+    loadData();
+  }
+
+  async function deleteAttendance(id: string) {
+    await supabase.from("attendance").delete().eq("id", id);
+    loadData();
+  }
 
   async function handleReceiptFile(file: File) {
     if (!storeId) return;
@@ -209,6 +288,78 @@ export default function ExpensesPage() {
           </>
         )}
       </div>
+
+      {hourlyStaff.length > 0 && (
+        <div>
+          <div className="text-gold font-bold text-sm mb-2">出勤情報（時給スタッフ）</div>
+          <div className="rounded-xl border border-line bg-elevated p-3 space-y-2 mb-2">
+            <select
+              value={attStaffId}
+              onChange={(e) => setAttStaffId(e.target.value)}
+              className="w-full rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            >
+              <option value="">スタッフを選択</option>
+              {hourlyStaff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2 items-center">
+              <input
+                type="time"
+                value={attStart}
+                onChange={(e) => setAttStart(e.target.value)}
+                className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+              />
+              <span className="text-gray-500 text-sm">〜</span>
+              <input
+                type="time"
+                value={attEnd}
+                onChange={(e) => setAttEnd(e.target.value)}
+                className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+              />
+            </div>
+            {attError && <p className="text-rose text-xs">{attError}</p>}
+            <button
+              onClick={addAttendance}
+              className="w-full rounded-md bg-gold text-bg px-3 py-2 text-sm font-bold"
+            >
+              追加する
+            </button>
+          </div>
+
+          {attendance.length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+              まだ記録がありません
+            </div>
+          ) : (
+            <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+              {attendance.map((a) => {
+                const hrs = attHours(a);
+                const inS = new Date(a.clock_in);
+                const outS = a.clock_out ? new Date(a.clock_out) : null;
+                return (
+                  <div key={a.id} className="flex justify-between items-center px-3 py-2 text-sm">
+                    <span className="text-gray-300">
+                      {staffName(a.staff_id)}{" "}
+                      {inS.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}〜
+                      {outS ? outS.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "未入力"}
+                    </span>
+                    <span className="font-mono text-gray-400 flex items-center gap-2">
+                      {hrs.toFixed(1)}h /{" "}
+                      {a.wage_snapshot != null ? `¥${Math.round(hrs * a.wage_snapshot).toLocaleString()}` : "時給未設定"}
+                      <button onClick={() => deleteAttendance(a.id)} className="text-rose">
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {viewerUrl && (
         <div

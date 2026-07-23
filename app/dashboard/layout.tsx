@@ -10,7 +10,6 @@ import { THEME_PRESETS } from "@/lib/theme";
 
 const TABS = [
   { href: "/dashboard", label: "営業" },
-  { href: "/dashboard/staff", label: "スタッフ" },
   { href: "/dashboard/expenses", label: "経費" },
   { href: "/dashboard/report", label: "集計" },
   { href: "/dashboard/settings", label: "設定" },
