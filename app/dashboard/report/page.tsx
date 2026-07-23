@@ -58,7 +58,7 @@ export default function ReportPage() {
     drinkBackAmount,
     showInsights,
   } = useStore();
-  const { date: businessDate } = useBusinessDate();
+  const { date: businessDate, isToday } = useBusinessDate();
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date(`${businessDate}T12:00:00`));
   const prevMonthAnchor = new Date(`${monthStart}T12:00:00`);
   prevMonthAnchor.setMonth(prevMonthAnchor.getMonth() - 1);
@@ -609,7 +609,7 @@ export default function ReportPage() {
     <div className="space-y-6">
       <DateBar />
       <div className="flex justify-between items-center">
-        <div className="text-gold font-bold text-sm">サマリー（{businessDate}）</div>
+        <div className="text-gold font-bold text-sm">📅 {isToday ? "本日" : businessDate}の売上</div>
         <button
           onClick={exportExcel}
           disabled={exporting}
@@ -619,7 +619,7 @@ export default function ReportPage() {
         </button>
       </div>
 
-      <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
+      <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
         <span className="text-gray-300 font-bold">総合売上（税込）</span>
         <span className="text-right text-gold font-bold">{yen(summary.total)}</span>
         <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
@@ -741,21 +741,21 @@ export default function ReportPage() {
       </div>
 
       <div>
-        <div className="text-gold font-bold text-sm mb-2">今月サマリー（{monthLabel}）</div>
-        <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
+        <div className="text-[#6FB3E0] font-bold text-sm mb-2">🗓️ 今月サマリー（{monthLabel}）</div>
+        <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
           <span className="text-gray-300 font-bold">総合売上（税込）</span>
-          <span className="text-right text-gold font-bold">{yen(monthTotal.total)}</span>
+          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total)}</span>
           <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
           <span className="text-gray-400 mt-2">人件費合計（歩合給+時給）</span>
           <span className="text-right mt-2">{yen(monthTotal.labor)}</span>
           <span className="text-gray-400">経費合計</span>
           <span className="text-right">{yen(monthTotal.expense)}</span>
           <span className="text-gray-300 font-bold">粗利合計</span>
-          <span className="text-right text-gold font-bold">{yen(monthTotal.profit)}</span>
+          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.profit)}</span>
         </div>
 
         {prevMonthSummary && (
-          <div className="rounded-xl border border-line bg-elevated p-3 mb-2">
+          <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 mb-2">
             <div className="text-xs text-gray-500 mb-2">{prevMonthLabel}との比較</div>
             <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
               {(
@@ -772,7 +772,7 @@ export default function ReportPage() {
                     <span className="text-right">
                       {yen(now)}
                       {change != null && (
-                        <span className={change >= 0 ? "text-gold" : "text-rose"}>
+                        <span className={change >= 0 ? "text-[#6FB3E0]" : "text-rose"}>
                           {" "}
                           ({change >= 0 ? "+" : ""}
                           {change.toFixed(0)}%)
@@ -788,7 +788,7 @@ export default function ReportPage() {
 
         <button
           onClick={() => setShowChart((v) => !v)}
-          className="w-full rounded-md border border-dashed border-gold text-gold py-2 text-sm font-bold mb-2"
+          className="w-full rounded-md border border-dashed border-[#6FB3E0] text-[#6FB3E0] py-2 text-sm font-bold mb-2"
         >
           {showChart ? "売上グラフを閉じる" : "月間売上グラフを見る"}
         </button>
@@ -801,7 +801,7 @@ export default function ReportPage() {
                 {selectedChartRow ? (
                   <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
                     <span className="text-gray-300 font-bold">総合売上（税込）</span>
-                    <span className="text-right text-gold font-bold">{yen(selectedChartRow.total)}</span>
+                    <span className="text-right text-[#6FB3E0] font-bold">{yen(selectedChartRow.total)}</span>
                     <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">
                       （消費税 {yen(selectedChartRow.tax)}）
                     </span>
@@ -810,7 +810,7 @@ export default function ReportPage() {
                     <span className="text-gray-400">経費</span>
                     <span className="text-right">{yen(selectedChartRow.expense)}</span>
                     <span className="text-gray-300 font-bold">粗利</span>
-                    <span className="text-right text-gold font-bold">{yen(selectedChartRow.profit)}</span>
+                    <span className="text-right text-[#6FB3E0] font-bold">{yen(selectedChartRow.profit)}</span>
                   </div>
                 ) : (
                   <div className="text-xs text-gray-500 text-center">この日の記録はありません</div>
