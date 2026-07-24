@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const supabase = createClient();
   const {
     storeId,
+    storeName,
     taxRate,
     commissionRate,
     cutoffHour,
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const [menuNameDrafts, setMenuNameDrafts] = useState<Record<string, string>>({});
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
+  const [storeNameDraft, setStoreNameDraft] = useState(storeName ?? "");
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
   const [cutoffHourDraft, setCutoffHourDraft] = useState(String(cutoffHour));
@@ -52,6 +54,7 @@ export default function SettingsPage() {
   const [showTokenHelp, setShowTokenHelp] = useState(false);
 
   useEffect(() => {
+    setStoreNameDraft(storeName ?? "");
     setTaxRateDraft(String(Math.round(taxRate * 100)));
     setCommissionRateDraft(String(Math.round(commissionRate * 100)));
     setCutoffHourDraft(String(cutoffHour));
@@ -63,6 +66,7 @@ export default function SettingsPage() {
     setThemeDraft(theme);
     setShowInsightsDraft(showInsights);
   }, [
+    storeName,
     taxRate,
     commissionRate,
     cutoffHour,
@@ -182,11 +186,12 @@ export default function SettingsPage() {
   }
 
   async function saveStoreSettings() {
-    if (!storeId) return;
+    if (!storeId || !storeNameDraft.trim()) return;
     setSavingStoreSettings(true);
     await supabase
       .from("stores")
       .update({
+        name: storeNameDraft.trim(),
         tax_rate: Number(taxRateDraft) / 100,
         commission_rate: Number(commissionRateDraft) / 100,
         business_day_cutoff_hour: Number(cutoffHourDraft),
@@ -255,6 +260,14 @@ export default function SettingsPage() {
       <div>
         <div className="text-gold font-bold text-sm mb-2">店舗設定</div>
         <div className="rounded-xl border border-line bg-elevated p-3 space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">店舗名</label>
+            <input
+              value={storeNameDraft}
+              onChange={(e) => setStoreNameDraft(e.target.value)}
+              className="w-full rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
+          </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1">消費税率（%）</label>
             <input
