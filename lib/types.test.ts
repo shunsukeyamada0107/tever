@@ -1,0 +1,313 @@
+// Date計算はローカル時刻に依存するため、日本時間で固定して検証する
+process.env.TZ = "Asia/Tokyo";
+
+import { describe, it, expect } from "vitest";
+import {
+  roundUpTo100,
+  tabSubtotal,
+  tabDiscountAmount,
+  tabTaxableSubtotal,
+  tabTax,
+  tabTotal,
+  businessDateFor,
+  attHours,
+  dayLaborCost,
+  hourlyLaborBreakdown,
+  staffCommissionBreakdown,
+  daySummary,
+  hexToRgbTriplet,
+  TabItem,
+  TabWithItems,
+  Attendance,
+  Expense,
+} from "./types";
+
+function item(overrides: Partial<TabItem> = {}): TabItem {
+  return {
+    id: overrides.id ?? Math.random().toString(36),
+    tab_id: "tab-1",
+    staff_id: null,
+    name: "テスト品目",
+    price: 1000,
+    qty: 1,
+    source: "menu",
+    is_cast_drink: false,
+    created_at: "2026-07-01T20:00:00+09:00",
+    ...overrides,
+  };
+}
+
+function tab(overrides: Partial<TabWithItems> = {}): TabWithItems {
+  return {
+    id: overrides.id ?? Math.random().toString(36),
+    store_id: "store-1",
+    business_date: "2026-07-01",
+    name: "テスト卓",
+    memo: "",
+    payment_method: "cash",
+    guest_count: null,
+    course_ends_at: null,
+    discount_percent: null,
+    discount_amount: null,
+    staff_id: null,
+    created_at: "2026-07-01T20:00:00+09:00",
+    closed_at: "2026-07-01T23:00:00+09:00",
+    tab_items: [],
+    ...overrides,
+  };
+}
+
+const staffNameOf = (id: string | null) => (id === "a" ? "Aさん" : id === "b" ? "Bさん" : "未設定");
+
+describe("roundUpTo100", () => {
+  it("rounds up to the nearest 100 yen", () => {
+    expect(roundUpTo100(1120)).toBe(1200);
+    expect(roundUpTo100(1200)).toBe(1200);
+    expect(roundUpTo100(1)).toBe(100);
+    expect(roundUpTo100(0)).toBe(0);
+  });
+});
+
+describe("tab subtotal / discount / tax / total", () => {
+  it("computes subtotal from items", () => {
+    const items = [item({ price: 1000, qty: 2 }), item({ price: 500, qty: 1 })];
+    expect(tabSubtotal(items)).toBe(2500);
+  });
+
+  it("applies percent discount, capped at the subtotal", () => {
+    const items = [item({ price: 1000, qty: 1 })];
+    expect(tabDiscountAmount(items, 30, null)).toBe(300);
+    expect(tabDiscountAmount(items, 150, null)).toBe(1000); // 割引が売上を超えない
+  });
+
+  it("combines percent and fixed discount", () => {
+    const items = [item({ price: 10000, qty: 1 })];
+    expect(tabDiscountAmount(items, 30, 500)).toBe(3500);
+    expect(tabTaxableSubtotal(items, 30, 500)).toBe(6500);
+  });
+
+  it("rounds tax to the nearest yen and total up to 100 yen", () => {
+    const items = [item({ price: 333, qty: 1 })];
+    expect(tabTax(items, 0.1)).toBe(33); // 333*0.1=33.3 -> 33
+    expect(tabTotal(items, 0.1)).toBe(400); // 333+33=366 -> 400
+  });
+
+  it("matches the no-discount, round-number case exactly", () => {
+    const items = [item({ price: 1000, qty: 2 })]; // 2000
+    expect(tabTax(items, 0.1)).toBe(200);
+    expect(tabTotal(items, 0.1)).toBe(2200);
+  });
+});
+
+describe("businessDateFor", () => {
+  // 2026-07-24 の実際のバグ: toISOString()でUTC変換していたため、切り替え時刻(6時)より前の
+  // 深夜帯で余分に1日ズレていた（2026-07-23になるべきところが2026-07-22になっていた）
+  it("stays on the previous business day for hours before the cutoff", () => {
+    const d = new Date("2026-07-24T02:00:00+09:00");
+    expect(businessDateFor(d, 6)).toBe("2026-07-23");
+  });
+
+  it("rolls over to the new business day exactly at the cutoff hour", () => {
+    const d = new Date("2026-07-24T06:00:00+09:00");
+    expect(businessDateFor(d, 6)).toBe("2026-07-24");
+  });
+
+  it("keeps the calendar date for ordinary evening hours", () => {
+    const d = new Date("2026-07-24T20:30:00+09:00");
+    expect(businessDateFor(d, 6)).toBe("2026-07-24");
+  });
+
+  it("handles a cutoff of 0 (midnight) as a no-op", () => {
+    const d = new Date("2026-07-24T00:30:00+09:00");
+    expect(businessDateFor(d, 0)).toBe("2026-07-24");
+  });
+});
+
+describe("attHours / dayLaborCost / hourlyLaborBreakdown", () => {
+  it("computes elapsed hours between clock in/out", () => {
+    const a: Attendance = {
+      id: "1",
+      store_id: "s",
+      staff_id: "a",
+      business_date: "2026-07-01",
+      clock_in: "2026-07-01T19:00:00+09:00",
+      clock_out: "2026-07-01T23:30:00+09:00",
+      wage_snapshot: 1500,
+    };
+    expect(attHours(a)).toBeCloseTo(4.5, 5);
+  });
+
+  it("uses now() when still clocked in", () => {
+    const a: Attendance = {
+      id: "1",
+      store_id: "s",
+      staff_id: "a",
+      business_date: "2026-07-01",
+      clock_in: "2026-07-01T19:00:00+09:00",
+      clock_out: null,
+      wage_snapshot: 1500,
+    };
+    const now = new Date("2026-07-01T21:00:00+09:00").getTime();
+    expect(attHours(a, now)).toBeCloseTo(2, 5);
+  });
+
+  it("sums hourly labor cost across staff, skipping unset wages", () => {
+    const attendance: Attendance[] = [
+      {
+        id: "1",
+        store_id: "s",
+        staff_id: "a",
+        business_date: "2026-07-01",
+        clock_in: "2026-07-01T19:00:00+09:00",
+        clock_out: "2026-07-01T23:00:00+09:00",
+        wage_snapshot: 1500,
+      },
+      {
+        id: "2",
+        store_id: "s",
+        staff_id: "b",
+        business_date: "2026-07-01",
+        clock_in: "2026-07-01T19:00:00+09:00",
+        clock_out: "2026-07-01T21:00:00+09:00",
+        wage_snapshot: null, // 時給未設定は人件費に含めない
+      },
+    ];
+    expect(dayLaborCost(attendance)).toBe(4 * 1500);
+
+    const rows = hourlyLaborBreakdown(attendance, staffNameOf);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ staffId: "a", hours: 4, cost: 6000 });
+  });
+});
+
+describe("staffCommissionBreakdown — simple scheme", () => {
+  it("gives 100% of the tab's actual total to the assigned staff, times the rate", () => {
+    const t = tab({
+      staff_id: "a",
+      discount_percent: null,
+      tab_items: [item({ price: 1000, qty: 3 })], // 3000 -> tax 300 -> total 3300 (no rounding needed)
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple");
+    expect(result).toHaveLength(1);
+    expect(result[0].staffId).toBe("a");
+    expect(result[0].salesWithTax).toBeCloseTo(3300, 5);
+    expect(result[0].commission).toBeCloseTo(660, 5); // 3300 * 0.2
+  });
+
+  it("lets a per-item staff override split commission between two staff", () => {
+    const t = tab({
+      staff_id: "a",
+      tab_items: [item({ price: 2000, qty: 1 }), item({ price: 2000, qty: 1, staff_id: "b" })],
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple");
+    const a = result.find((r) => r.staffId === "a")!;
+    const b = result.find((r) => r.staffId === "b")!;
+    // 4000 subtotal -> tax 400 -> total 4400、半々の按分
+    expect(a.salesWithTax).toBeCloseTo(2200, 5);
+    expect(b.salesWithTax).toBeCloseTo(2200, 5);
+  });
+
+  it("excludes commission-ineligible staff from the payout", () => {
+    const t = tab({ staff_id: "a", tab_items: [item({ price: 3000, qty: 1 })] });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple", 200, (id) => id !== "a");
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores tabs that are still open (no closed_at)", () => {
+    const t = tab({ staff_id: "a", closed_at: null, tab_items: [item({ price: 3000, qty: 1 })] });
+    expect(staffCommissionBreakdown([t], staffNameOf)).toHaveLength(0);
+  });
+});
+
+describe("staffCommissionBreakdown — drink_back scheme (matches the spec example)", () => {
+  it("30,000円の売上・5,000円のドリンク・5杯で 売上バック2,500円+ドリンクバック1,000円=3,500円になる", () => {
+    const t = tab({
+      staff_id: "a",
+      tab_items: [
+        item({ price: 25000, qty: 1 }), // 通常売上分
+        item({ price: 1000, qty: 5, is_cast_drink: true }), // キャストドリンク5杯 x¥1,000 = 5,000円
+      ],
+    });
+    // 割引なし・税率0%相当にして、サンプルの生数字とそのまま突き合わせられるようにする
+    const result = staffCommissionBreakdown([t], staffNameOf, 0, 0.1, "drink_back", 200);
+    expect(result).toHaveLength(1);
+    const r = result[0];
+    expect(r.drinkCount).toBe(5);
+    expect(r.drinkBack).toBe(1000); // 200円 x 5杯
+    expect(r.salesBack).toBeCloseTo(2500, 5); // (30000-5000)*10%
+    expect(r.commission).toBeCloseTo(3500, 5);
+  });
+});
+
+describe("daySummary reconciliation", () => {
+  it("keeps cash+card+unsettled equal to total, and profit = total - labor - expense", () => {
+    const tabs: TabWithItems[] = [
+      tab({
+        staff_id: "a",
+        payment_method: "cash",
+        tab_items: [item({ price: 1000, qty: 3 })], // total 3300
+      }),
+      tab({
+        staff_id: "b",
+        payment_method: "card",
+        tab_items: [item({ price: 2000, qty: 2 })], // total 4400
+      }),
+      tab({
+        staff_id: "a",
+        closed_at: null, // 未会計
+        tab_items: [item({ price: 500, qty: 1 })], // total 550
+      }),
+    ];
+    const attendance: Attendance[] = [
+      {
+        id: "1",
+        store_id: "s",
+        staff_id: "a",
+        business_date: "2026-07-01",
+        clock_in: "2026-07-01T19:00:00+09:00",
+        clock_out: "2026-07-01T23:00:00+09:00",
+        wage_snapshot: 1500,
+      },
+    ];
+    const expenses: Expense[] = [
+      { id: "1", store_id: "s", business_date: "2026-07-01", category: "仕入れ", name: "氷", amount: 2000, receipt_url: null, created_at: "2026-07-01T20:00:00+09:00" },
+    ];
+
+    const summary = daySummary(tabs, attendance, expenses, staffNameOf, 0.1, 0.2, "simple");
+
+    expect(summary.cash + summary.card + summary.unsettled).toBeCloseTo(summary.total, 5);
+    expect(summary.profit).toBeCloseTo(summary.total - summary.labor - summary.expense, 8);
+    expect(summary.labor).toBeCloseTo(summary.laborHourly + summary.commissionTotal, 8);
+  });
+
+  it("excludes ineligible staff's sales from commissionTotal but keeps their hourly cost", () => {
+    const tabs: TabWithItems[] = [tab({ staff_id: "kitchen", tab_items: [item({ price: 3000, qty: 1 })] })];
+    const attendance: Attendance[] = [
+      {
+        id: "1",
+        store_id: "s",
+        staff_id: "kitchen",
+        business_date: "2026-07-01",
+        clock_in: "2026-07-01T19:00:00+09:00",
+        clock_out: "2026-07-01T23:00:00+09:00",
+        wage_snapshot: 1300,
+      },
+    ];
+    const summary = daySummary(tabs, attendance, [], staffNameOf, 0.1, 0.2, "simple", 200, (id) => id !== "kitchen");
+    expect(summary.commissionTotal).toBe(0);
+    expect(summary.laborHourly).toBe(4 * 1300);
+    expect(summary.labor).toBe(4 * 1300);
+  });
+});
+
+describe("hexToRgbTriplet", () => {
+  it("converts a hex color to an R G B triplet", () => {
+    expect(hexToRgbTriplet("#DCA84E")).toBe("220 168 78");
+    expect(hexToRgbTriplet("6FB3E0")).toBe("111 179 224");
+  });
+
+  it("falls back to the default gold for invalid input", () => {
+    expect(hexToRgbTriplet("not-a-color")).toBe("220 168 78");
+    expect(hexToRgbTriplet("#fff")).toBe("220 168 78");
+  });
+});
