@@ -384,6 +384,9 @@ function POSPageInner() {
 
   async function settleTab(method: "cash" | "card") {
     if (!activeTab) return;
+    const amount = tabTotal(activeTab.tab_items, taxRate, activeTab.discount_percent, activeTab.discount_amount);
+    const methodLabel = method === "cash" ? "現金" : "カード";
+    if (!confirm(`${methodLabel}で ¥${amount.toLocaleString()} を会計しますか？`)) return;
     await supabase
       .from("tabs")
       .update({ payment_method: method, closed_at: new Date().toISOString() })
