@@ -39,7 +39,30 @@ export default function OrgDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
+  const [enteringId, setEnteringId] = useState<string | null>(null);
+  const [enterError, setEnterError] = useState<string | null>(null);
   const { start: monthStart, end: monthEnd, label: monthLabel } = monthRange(new Date());
+
+  async function handleEnter(store: StoreStat) {
+    const confirmed = window.confirm(
+      `「${store.name}」のオーナーとしてログインし直します。組織アカウントとしてのログインは切れます。よろしいですか？`
+    );
+    if (!confirmed) return;
+
+    setEnterError(null);
+    setEnteringId(store.id);
+
+    const res = await fetch(`/api/org/stores/${store.id}/enter`, { method: "POST" });
+    const body = await res.json();
+
+    if (!res.ok) {
+      setEnteringId(null);
+      setEnterError(body.error ?? "入れませんでした。");
+      return;
+    }
+
+    window.location.href = body.url;
+  }
 
   useEffect(() => {
     async function load() {
@@ -172,6 +195,7 @@ export default function OrgDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="text-gold font-bold text-lg">{orgName ?? "読み込み中..."}</div>
+      {enterError && <p className="text-rose text-sm">{enterError}</p>}
 
       {!stats ? (
         <div className="text-sm text-gray-500 text-center py-10">読み込み中...</div>
@@ -213,7 +237,13 @@ export default function OrgDashboardPage() {
                 .slice()
                 .sort((a, b) => b.liveGuestCount - a.liveGuestCount)
                 .map((s) => (
-                  <div key={s.id} className="rounded-xl border border-line bg-elevated p-3 text-sm">
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleEnter(s)}
+                    disabled={enteringId === s.id}
+                    className="w-full text-left rounded-xl border border-line bg-elevated p-3 text-sm active:opacity-70 disabled:opacity-50"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span
@@ -223,12 +253,14 @@ export default function OrgDashboardPage() {
                         />
                         <span className="font-bold">{s.name}</span>
                       </div>
-                      <span className="text-green-400 font-bold font-mono">{yen(s.livePreCheckoutTotal)}</span>
+                      <span className="text-green-400 font-bold font-mono">
+                        {enteringId === s.id ? "移動中..." : yen(s.livePreCheckoutTotal)}
+                      </span>
                     </div>
                     <div className="text-gray-400 text-xs mt-1">
                       {s.liveGroupCount}組 / {s.liveGuestCount}名
                     </div>
-                  </div>
+                  </button>
                 ))}
             </div>
           </div>
@@ -249,8 +281,17 @@ export default function OrgDashboardPage() {
                 .slice()
                 .sort((a, b) => b.monthTotal - a.monthTotal)
                 .map((s) => (
-                  <div key={s.id} className="rounded-xl border border-line bg-elevated p-3 text-sm">
-                    <div className="font-bold mb-1">{s.name}</div>
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleEnter(s)}
+                    disabled={enteringId === s.id}
+                    className="w-full text-left rounded-xl border border-line bg-elevated p-3 text-sm active:opacity-70 disabled:opacity-50"
+                  >
+                    <div className="font-bold mb-1">
+                      {s.name}
+                      {enteringId === s.id && <span className="text-gray-500 font-normal text-xs ml-2">移動中...</span>}
+                    </div>
                     <div className="grid grid-cols-2 gap-y-0.5 font-mono text-xs">
                       <span className="text-gray-400">本日の売上（{s.todayTabCount}組）</span>
                       <span className="text-right text-gold font-bold">{yen(s.todayTotal)}</span>
@@ -259,7 +300,7 @@ export default function OrgDashboardPage() {
                       <span className="text-gray-400">{monthLabel}の経費</span>
                       <span className="text-right">{yen(s.monthExpense)}</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
             </div>
           </div>
