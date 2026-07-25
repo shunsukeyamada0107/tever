@@ -16,13 +16,34 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
+      setLoading(false);
       setError("ログインに失敗しました。メールアドレスとパスワードを確認してください。");
       return;
     }
-    router.push("/dashboard");
+
+    const { data: storeMember } = await supabase
+      .from("store_members")
+      .select("store_id")
+      .eq("user_id", data.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (storeMember) {
+      router.push("/dashboard");
+      return;
+    }
+
+    const { data: orgMember } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", data.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    setLoading(false);
+    router.push(orgMember ? "/org" : "/dashboard");
   }
 
   return (
