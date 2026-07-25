@@ -411,6 +411,64 @@ function POSPageInner() {
   const openTabs = tabs.filter((t) => !t.closed_at);
   const closedTabs = tabs.filter((t) => t.closed_at);
 
+  function renderCheckoutSummary(tab: TabWithItems) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg bg-bg2 px-3 py-2 font-mono text-sm space-y-1">
+          <div className="flex justify-between text-gray-400">
+            <span>小計</span>
+            <span>¥{tabSubtotal(tab.tab_items).toLocaleString()}</span>
+          </div>
+          {!!(tab.discount_percent || tab.discount_amount) && (
+            <div className="flex justify-between text-rose">
+              <span>
+                割引
+                {tab.discount_percent ? `（${tab.discount_percent}%OFF）` : ""}
+              </span>
+              <span>
+                -¥{tabDiscountAmount(tab.tab_items, tab.discount_percent, tab.discount_amount).toLocaleString()}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between text-gray-400">
+            <span>消費税</span>
+            <span>¥{tabTax(tab.tab_items, taxRate, tab.discount_percent, tab.discount_amount).toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-gold font-bold text-lg pt-1 border-t border-dashed border-line">
+            <span>合計</span>
+            <span>¥{tabTotal(tab.tab_items, taxRate, tab.discount_percent, tab.discount_amount).toLocaleString()}</span>
+          </div>
+        </div>
+
+        {!tab.closed_at ? (
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => settleTab("cash")}
+              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+            >
+              <span className="text-2xl leading-none">💴</span>
+              現金で会計
+            </button>
+            <button
+              onClick={() => settleTab("card")}
+              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+            >
+              <span className="text-2xl leading-none">💳</span>
+              カードで会計
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={reopenTab}
+            className="w-full rounded-xl border-2 border-line py-3 text-sm font-bold text-gray-300"
+          >
+            会計を取り消す
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <DateBar />
@@ -845,6 +903,14 @@ function POSPageInner() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div
+            style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
+            className="rounded-xl border border-line bg-elevated p-4"
+          >
+            <div className="text-gold font-bold text-sm mb-2">会計（もう一度）</div>
+            {renderCheckoutSummary(activeTab)}
           </div>
         </>
       )}
