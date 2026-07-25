@@ -909,7 +909,7 @@ function POSPageInner() {
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
             className="rounded-xl border border-line bg-elevated p-4"
           >
-            <div className="text-gold font-bold text-sm mb-2">会計（もう一度）</div>
+            <div className="text-gold font-bold text-sm mb-2">会計</div>
             {renderCheckoutSummary(activeTab)}
           </div>
         </>

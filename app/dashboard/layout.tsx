@@ -48,13 +48,15 @@ function HeaderBar() {
   }
 
   return (
-    <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3 flex items-center justify-between">
-      <div className="text-gold font-bold text-sm tracking-wide">
-        {loading ? "読み込み中..." : storeName ?? "店舗未設定"}
+    <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3">
+      <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className="text-gold font-bold text-sm tracking-wide">
+          {loading ? "読み込み中..." : storeName ?? "店舗未設定"}
+        </div>
+        <button onClick={handleLogout} className="text-xs text-gray-400 border border-line rounded-md px-2 py-1">
+          ログアウト
+        </button>
       </div>
-      <button onClick={handleLogout} className="text-xs text-gray-400 border border-line rounded-md px-2 py-1">
-        ログアウト
-      </button>
     </div>
   );
 }
@@ -67,19 +69,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="min-h-screen pb-20">
           <ThemeStyle />
           <HeaderBar />
-          <main className="p-4">{children}</main>
-          <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">
-            {TABS.map((tab) => (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`flex-1 text-center py-3 text-xs font-bold ${
-                  pathname === tab.href ? "text-gold" : "text-gray-400"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            ))}
+          <main className="p-4 max-w-md mx-auto">{children}</main>
+          <nav className="fixed bottom-0 left-0 right-0 border-t border-line bg-bg2/95 backdrop-blur">
+            <div className="max-w-md mx-auto flex">
+              {TABS.map((tab) => (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={`flex-1 text-center py-3 text-xs font-bold ${
+                    pathname === tab.href ? "text-gold" : "text-gray-400"
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </div>
           </nav>
         </div>
       </BusinessDateProvider>
