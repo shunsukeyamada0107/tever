@@ -52,6 +52,7 @@ type LaborRow = {
   hours: number | null;
   wage: number | null;
   hourlyCost: number | null;
+  salesWithTax: number | null;
   commission: number | null;
   salesBack: number | null;
   drinkBack: number | null;
@@ -74,6 +75,7 @@ function buildLaborRows(hourly: HourlyLaborRow[], comm: StaffCommission[], staff
         hours: h?.hours ?? null,
         wage: staffList.find((s) => s.id === id)?.hourly_wage ?? null,
         hourlyCost: h?.cost ?? null,
+        salesWithTax: c?.salesWithTax ?? null,
         commission: c?.commission ?? null,
         salesBack: c?.salesBack ?? null,
         drinkBack: c?.drinkBack ?? null,
@@ -715,6 +717,9 @@ export default function ReportPage() {
                     {yen(r.hourlyCost ?? 0)}
                   </div>
                 )}
+                {r.salesWithTax != null && (
+                  <div className="text-xs text-gray-400">担当売上 {yen(r.salesWithTax)}</div>
+                )}
                 {r.commission != null &&
                   (commissionScheme === "drink_back" ? (
                     <div className="text-xs text-gray-400">
@@ -815,6 +820,9 @@ export default function ReportPage() {
                       時間 {r.hours.toFixed(1)}h ・ 時給 {r.wage != null ? yen(r.wage) : "未設定"} ・ 人件費{" "}
                       {yen(r.hourlyCost ?? 0)}
                     </div>
+                  )}
+                  {r.salesWithTax != null && (
+                    <div className="text-xs text-gray-400">担当売上 {yen(r.salesWithTax)}</div>
                   )}
                   {r.commission != null &&
                     (commissionScheme === "drink_back" ? (
