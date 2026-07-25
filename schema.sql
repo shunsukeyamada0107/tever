@@ -175,9 +175,12 @@ as $$
 $$;
 
 -- 自分が本部メンバーとして所属する組織配下の、全店舗IDを返すヘルパー関数（閲覧専用アクセスの起点）
+-- security definer必須: storesを内部で参照するため、invoker権限のままだとstores自身のRLSポリシーが
+-- 再びこの関数を呼び出し無限再帰になる（"stack depth limit exceeded"で必ず失敗する）
 create or replace function my_org_store_ids()
 returns setof uuid
-language sql stable
+language sql stable security definer
+set search_path = public
 as $$
   select s.id
   from stores s
