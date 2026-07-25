@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (!user && pathname.startsWith("/dashboard")) {
+  if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/org"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -63,7 +63,23 @@ export async function middleware(request: NextRequest) {
 
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    const { data: storeMember } = await supabase
+      .from("store_members")
+      .select("store_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    if (storeMember) {
+      url.pathname = "/dashboard";
+    } else {
+      const { data: orgMember } = await supabase
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      url.pathname = orgMember ? "/org" : "/dashboard";
+    }
     return NextResponse.redirect(url);
   }
 

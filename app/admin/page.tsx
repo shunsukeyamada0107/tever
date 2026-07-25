@@ -6,7 +6,16 @@ type StoreRow = {
   id: string;
   name: string;
   plan: string;
+  organization_id: string | null;
   created_at: string;
+};
+
+type OrganizationRow = {
+  id: string;
+  name: string;
+  created_at: string;
+  stores: { id: string; name: string }[];
+  loginEmail: string | null;
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -40,6 +49,24 @@ export default function AdminPage() {
   const [enterError, setEnterError] = useState<string | null>(null);
   const [updatingPlanId, setUpdatingPlanId] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [updatingOrgStoreId, setUpdatingOrgStoreId] = useState<string | null>(null);
+  const [orgAssignError, setOrgAssignError] = useState<string | null>(null);
+
+  const [organizations, setOrganizations] = useState<OrganizationRow[] | null>(null);
+  const [orgListError, setOrgListError] = useState<string | null>(null);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [orgFormError, setOrgFormError] = useState<string | null>(null);
+  const [deletingOrgId, setDeletingOrgId] = useState<string | null>(null);
+  const [orgDeleteError, setOrgDeleteError] = useState<string | null>(null);
+  const [loginFormOrgId, setLoginFormOrgId] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState(generatePassword());
+  const [creatingLogin, setCreatingLogin] = useState(false);
+  const [loginFormError, setLoginFormError] = useState<string | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ organizationName: string; loginEmail: string; password: string } | null>(
+    null
+  );
 
   async function loadStores() {
     setListError(null);
@@ -52,8 +79,20 @@ export default function AdminPage() {
     setStores(body.stores);
   }
 
+  async function loadOrganizations() {
+    setOrgListError(null);
+    const res = await fetch("/api/admin/organizations");
+    const body = await res.json();
+    if (!res.ok) {
+      setOrgListError(body.error ?? "組織一覧の取得に失敗しました。");
+      return;
+    }
+    setOrganizations(body.organizations);
+  }
+
   useEffect(() => {
     loadStores();
+    loadOrganizations();
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
@@ -145,6 +184,107 @@ export default function AdminPage() {
     }
 
     loadStores();
+  }
+
+  async function handleAssignOrg(store: StoreRow, organizationId: string) {
+    setOrgAssignError(null);
+    setUpdatingOrgStoreId(store.id);
+
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: organizationId || null }),
+    });
+    const body = await res.json();
+
+    setUpdatingOrgStoreId(null);
+
+    if (!res.ok) {
+      setOrgAssignError(body.error ?? "組織の割り当てに失敗しました。");
+      return;
+    }
+
+    loadStores();
+    loadOrganizations();
+  }
+
+  async function handleCreateOrg(e: React.FormEvent) {
+    e.preventDefault();
+    setCreatingOrg(true);
+    setOrgFormError(null);
+
+    const res = await fetch("/api/admin/organizations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newOrgName }),
+    });
+    const body = await res.json();
+
+    setCreatingOrg(false);
+
+    if (!res.ok) {
+      setOrgFormError(body.error ?? "作成に失敗しました。");
+      return;
+    }
+
+    setNewOrgName("");
+    loadOrganizations();
+  }
+
+  async function handleDeleteOrg(org: OrganizationRow) {
+    const confirmed = window.confirm(
+      `「${org.name}」を削除します。\n本部ログインアカウントも削除されます（所属店舗自体は削除されません）。\n本当に削除しますか？`
+    );
+    if (!confirmed) return;
+
+    setOrgDeleteError(null);
+    setDeletingOrgId(org.id);
+
+    const res = await fetch(`/api/admin/organizations/${org.id}`, { method: "DELETE" });
+    const body = await res.json();
+
+    setDeletingOrgId(null);
+
+    if (!res.ok) {
+      setOrgDeleteError(body.error ?? "削除に失敗しました。");
+      return;
+    }
+
+    loadOrganizations();
+    loadStores();
+  }
+
+  function openLoginForm(orgId: string) {
+    setLoginFormOrgId(orgId);
+    setLoginEmail("");
+    setLoginPassword(generatePassword());
+    setLoginFormError(null);
+  }
+
+  async function handleCreateLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!loginFormOrgId) return;
+    setCreatingLogin(true);
+    setLoginFormError(null);
+    setCreatedLogin(null);
+
+    const res = await fetch(`/api/admin/organizations/${loginFormOrgId}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+    });
+    const body = await res.json();
+
+    setCreatingLogin(false);
+
+    if (!res.ok) {
+      setLoginFormError(body.error ?? "作成に失敗しました。");
+      return;
+    }
+
+    setCreatedLogin({ organizationName: body.organizationName, loginEmail: body.loginEmail, password: loginPassword });
+    setLoginFormOrgId(null);
+    loadOrganizations();
   }
 
   return (
@@ -269,6 +409,146 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
+                {organizations && organizations.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">組織</span>
+                    <select
+                      value={s.organization_id ?? ""}
+                      onChange={(e) => handleAssignOrg(s, e.target.value)}
+                      disabled={updatingOrgStoreId === s.id}
+                      className="text-xs rounded-md bg-bg border border-line px-2 py-1 disabled:opacity-50"
+                    >
+                      <option value="">未所属</option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {orgAssignError && <p className="text-rose text-sm">{orgAssignError}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-bold text-gray-200">組織（複数店舗の一括管理）</h2>
+        <p className="text-xs text-gray-500">
+          複数店舗を運営するお客様向けに、全店舗の売上をまとめて見られる本部アカウントを発行できます。
+        </p>
+
+        <form onSubmit={handleCreateOrg} className="bg-bg2 border border-line rounded-xl p-4 flex gap-2">
+          <input
+            value={newOrgName}
+            onChange={(e) => setNewOrgName(e.target.value)}
+            placeholder="組織名（例：〇〇グループ）"
+            required
+            className="flex-1 min-w-0 rounded-md bg-bg border border-line px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={creatingOrg}
+            className="rounded-md bg-gold text-bg px-3 py-2 text-sm font-bold disabled:opacity-50 shrink-0"
+          >
+            {creatingOrg ? "作成中..." : "＋ 追加"}
+          </button>
+        </form>
+        {orgFormError && <p className="text-rose text-sm">{orgFormError}</p>}
+
+        {createdLogin && (
+          <div className="bg-bg2 border border-gold rounded-xl p-4 space-y-1 text-sm">
+            <p className="text-gold font-bold">本部アカウントを作成しました</p>
+            <p>組織名: {createdLogin.organizationName}</p>
+            <p>ログイン用メール: {createdLogin.loginEmail}</p>
+            <p>
+              初期パスワード: <span className="font-mono">{createdLogin.password}</span>
+            </p>
+            <p className="text-xs text-gray-500">このパスワードは今だけ表示されます。組織の担当者に伝えてください。</p>
+          </div>
+        )}
+
+        {orgListError && <p className="text-rose text-sm">{orgListError}</p>}
+        {orgDeleteError && <p className="text-rose text-sm">{orgDeleteError}</p>}
+        {!organizations && !orgListError && <p className="text-xs text-gray-500">読み込み中...</p>}
+        {organizations && organizations.length === 0 && (
+          <p className="text-xs text-gray-500">まだ組織がありません。</p>
+        )}
+        {organizations && organizations.length > 0 && (
+          <ul className="divide-y divide-line border border-line rounded-xl overflow-hidden">
+            {organizations.map((org) => (
+              <li key={org.id} className="px-4 py-3 bg-bg2 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold">{org.name}</div>
+                  <button
+                    onClick={() => handleDeleteOrg(org)}
+                    disabled={deletingOrgId === org.id}
+                    className="text-xs text-rose border border-rose/50 rounded-md px-2 py-1 disabled:opacity-50"
+                  >
+                    {deletingOrgId === org.id ? "削除中..." : "削除"}
+                  </button>
+                </div>
+                <div className="text-xs text-gray-500">
+                  所属店舗:{" "}
+                  {org.stores.length > 0 ? org.stores.map((s) => s.name).join("、") : "なし（上の店舗一覧から割り当ててください）"}
+                </div>
+                {org.loginEmail ? (
+                  <div className="text-xs text-gray-400">本部ログイン: {org.loginEmail}</div>
+                ) : loginFormOrgId === org.id ? (
+                  <form onSubmit={handleCreateLogin} className="space-y-2 pt-1">
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="本部担当者のメールアドレス"
+                      className="w-full rounded-md bg-bg border border-line px-2 py-1.5 text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        required
+                        minLength={6}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className="flex-1 min-w-0 rounded-md bg-bg border border-line px-2 py-1.5 text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setLoginPassword(generatePassword())}
+                        className="text-xs text-gray-400 border border-line rounded-md px-2 shrink-0"
+                      >
+                        再生成
+                      </button>
+                    </div>
+                    {loginFormError && <p className="text-rose text-xs">{loginFormError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLoginFormOrgId(null)}
+                        className="flex-1 rounded-md border border-line py-1.5 text-xs text-gray-300"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={creatingLogin}
+                        className="flex-1 rounded-md bg-gold text-bg py-1.5 text-xs font-bold disabled:opacity-50"
+                      >
+                        {creatingLogin ? "作成中..." : "発行する"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => openLoginForm(org.id)}
+                    className="text-xs rounded-md border border-dashed border-gold text-gold px-2 py-1"
+                  >
+                    ＋ 本部ログインを発行
+                  </button>
+                )}
               </li>
             ))}
           </ul>

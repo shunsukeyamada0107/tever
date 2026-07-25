@@ -22,7 +22,7 @@ export async function GET() {
   const admin = createAdminSupabaseClient();
   const { data, error } = await admin
     .from("stores")
-    .select("id, name, plan, created_at")
+    .select("id, name, plan, organization_id, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {

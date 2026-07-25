@@ -7,6 +7,15 @@
 create extension if not exists "pgcrypto";
 
 -- ------------------------------------------------------------
+-- 0. 組織（複数店舗を運営する企業・グループ単位。任意）
+-- ------------------------------------------------------------
+create table organizations (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  created_at  timestamptz not null default now()
+);
+
+-- ------------------------------------------------------------
 -- 1. 店舗（テナントの単位。TEVERも1店舗として登録する）
 -- ------------------------------------------------------------
 create table stores (
@@ -23,6 +32,7 @@ create table stores (
   accent_color              text not null default '#DCA84E', -- 店舗ごとのブランドカラー（アプリのゴールド部分に反映）
   theme                     text not null default 'dark' check (theme in ('dark','light')), -- 店舗ごとの画面テーマ
   show_insights             boolean not null default true, -- 集計タブの「気づき」セクションを表示するか
+  organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
   created_at                timestamptz not null default now()
 );
 
@@ -37,6 +47,17 @@ create table store_members (
   role        text not null default 'staff' check (role in ('owner','staff')),
   created_at  timestamptz not null default now(),
   unique (store_id, user_id)
+);
+
+-- ------------------------------------------------------------
+-- 2b. 組織メンバー（本部アカウントと組織の紐付け。組織配下の全店舗を横断で閲覧できる）
+-- ------------------------------------------------------------
+create table organization_members (
+  id               uuid primary key default gen_random_uuid(),
+  organization_id  uuid not null references organizations(id) on delete cascade,
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  created_at       timestamptz not null default now(),
+  unique (organization_id, user_id)
 );
 
 -- ------------------------------------------------------------
@@ -134,6 +155,8 @@ create table expenses (
 -- 「自分がstore_membersに登録されている店舗のデータしか見えない」ようにする
 -- ============================================================
 
+alter table organizations        enable row level security;
+alter table organization_members enable row level security;
 alter table stores        enable row level security;
 alter table store_members enable row level security;
 alter table staff         enable row level security;
@@ -151,12 +174,34 @@ as $$
   select store_id from store_members where user_id = auth.uid();
 $$;
 
+-- 自分が本部メンバーとして所属する組織配下の、全店舗IDを返すヘルパー関数（閲覧専用アクセスの起点）
+create or replace function my_org_store_ids()
+returns setof uuid
+language sql stable
+as $$
+  select s.id
+  from stores s
+  join organization_members om on om.organization_id = s.organization_id
+  where om.user_id = auth.uid();
+$$;
+
 -- 各テーブル共通：自分の店舗のデータだけ read/write できる
 create policy "users can see their own membership"
   on store_members for select using (user_id = auth.uid());
 
+create policy "users can see their own org membership"
+  on organization_members for select using (user_id = auth.uid());
+
+create policy "org members can see their organization"
+  on organizations for select using (
+    id in (select organization_id from organization_members where user_id = auth.uid())
+  );
+
 create policy "store members can access their store"
   on stores for select using (id in (select my_store_ids()));
+
+create policy "org members can view their organization's stores"
+  on stores for select using (id in (select my_org_store_ids()));
 
 create policy "store owners can update their store"
   on stores for update using (
@@ -166,22 +211,39 @@ create policy "store owners can update their store"
 create policy "store members can access their staff"
   on staff for all using (store_id in (select my_store_ids()));
 
+create policy "org members can view their organization's staff"
+  on staff for select using (store_id in (select my_org_store_ids()));
+
 create policy "store members can access their menu"
   on menu_items for all using (store_id in (select my_store_ids()));
 
 create policy "store members can access their tabs"
   on tabs for all using (store_id in (select my_store_ids()));
 
+create policy "org members can view their organization's tabs"
+  on tabs for select using (store_id in (select my_org_store_ids()));
+
 create policy "store members can access their tab items"
   on tab_items for all using (
     tab_id in (select id from tabs where store_id in (select my_store_ids()))
   );
 
+create policy "org members can view their organization's tab items"
+  on tab_items for select using (
+    tab_id in (select id from tabs where store_id in (select my_org_store_ids()))
+  );
+
 create policy "store members can access their attendance"
   on attendance for all using (store_id in (select my_store_ids()));
 
+create policy "org members can view their organization's attendance"
+  on attendance for select using (store_id in (select my_org_store_ids()));
+
 create policy "store members can access their expenses"
   on expenses for all using (store_id in (select my_store_ids()));
+
+create policy "org members can view their organization's expenses"
+  on expenses for select using (store_id in (select my_org_store_ids()));
 
 -- ============================================================
 -- Storage（レシート画像の保存先）
@@ -216,10 +278,16 @@ create index if not exists idx_expenses_store_business_date on expenses(store_id
 -- tab_itemsはstore_idを持たないため、tabs経由のRLS/joinを速くする
 create index if not exists idx_tab_items_tab_id on tab_items(tab_id);
 
+-- my_org_store_ids()が組織側RLSポリシーの起点になるため重要
+create index if not exists idx_organization_members_user_id on organization_members(user_id);
+create index if not exists idx_stores_organization_id on stores(organization_id);
+
 -- ============================================================
 -- 自己サインアップ：新規ユーザー登録時に自動で店舗を作成
 -- auth.usersにレコードが作られたタイミングで発火し、
 -- サインアップ時に渡したstore_nameでstoresを作成、そのユーザーをownerとして紐付ける
+-- ただし account_type='organization' で作成されたアカウント（組織の本部アカウント）は
+-- 店舗を自動作成しない（/admin側で組織メンバーとして別途登録する）
 -- ============================================================
 create or replace function handle_new_user_signup()
 returns trigger
@@ -230,6 +298,10 @@ as $$
 declare
   new_store_id uuid;
 begin
+  if coalesce(new.raw_user_meta_data->>'account_type', 'store') = 'organization' then
+    return new;
+  end if;
+
   insert into stores (name)
   values (coalesce(new.raw_user_meta_data->>'store_name', '新しい店舗'))
   returning id into new_store_id;

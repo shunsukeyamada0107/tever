@@ -22,13 +22,28 @@ export async function PATCH(request: Request, { params }: { params: { storeId: s
   }
 
   const body = await request.json();
-  const plan = body.plan;
-  if (!VALID_PLANS.includes(plan)) {
-    return NextResponse.json({ error: "不正なプランです" }, { status: 400 });
+  const update: Record<string, unknown> = {};
+
+  if ("plan" in body) {
+    if (!VALID_PLANS.includes(body.plan)) {
+      return NextResponse.json({ error: "不正なプランです" }, { status: 400 });
+    }
+    update.plan = body.plan;
+  }
+
+  if ("organizationId" in body) {
+    if (body.organizationId !== null && typeof body.organizationId !== "string") {
+      return NextResponse.json({ error: "不正な組織IDです" }, { status: 400 });
+    }
+    update.organization_id = body.organizationId;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "更新内容がありません" }, { status: 400 });
   }
 
   const admin = createAdminSupabaseClient();
-  const { error } = await admin.from("stores").update({ plan }).eq("id", params.storeId);
+  const { error } = await admin.from("stores").update(update).eq("id", params.storeId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
