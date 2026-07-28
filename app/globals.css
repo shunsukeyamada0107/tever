@@ -16,7 +16,10 @@
 }
 
 body {
-  background: radial-gradient(ellipse 120% 70% at 50% -10%, rgb(19 24 33) 0%, rgb(var(--page-bg-rgb)) 55%) fixed;
+  /* iOSのSafariはbackground-attachment: fixedとbackdrop-blurの組み合わせで描画が崩れる
+     （スクロール時に別位置の内容が端に見切れる）既知の不具合があるため、fixedにしない */
+  background: radial-gradient(ellipse 120% 70% at 50% -10%, rgb(19 24 33) 0%, rgb(var(--page-bg-rgb)) 55%);
+  background-color: rgb(var(--page-bg-rgb));
   color: rgb(var(--page-text-rgb));
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
