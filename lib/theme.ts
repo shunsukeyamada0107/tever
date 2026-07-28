@@ -15,15 +15,15 @@ type ThemePreset = {
 // 各値は "R G B" 形式（TailwindのCSS変数カラーにそのまま渡せる形）
 export const THEME_PRESETS: Record<StoreTheme, ThemePreset> = {
   dark: {
-    bg2: "23 27 54",
-    elevated: "30 35 66",
-    line: "44 49 87",
-    pageBg: "17 20 42",
-    pageText: "238 234 242",
-    gray200: "229 231 235",
-    gray300: "209 213 219",
-    gray400: "156 163 175",
-    gray500: "107 114 128",
+    bg2: "23 28 38",
+    elevated: "23 28 38",
+    line: "31 34 40",
+    pageBg: "11 15 21",
+    pageText: "255 255 255",
+    gray200: "255 255 255",
+    gray300: "214 219 226",
+    gray400: "154 164 178",
+    gray500: "107 116 128",
   },
   light: {
     bg2: "255 255 255",

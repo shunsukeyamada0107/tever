@@ -307,7 +307,7 @@ describe("hexToRgbTriplet", () => {
   });
 
   it("falls back to the default gold for invalid input", () => {
-    expect(hexToRgbTriplet("not-a-color")).toBe("220 168 78");
-    expect(hexToRgbTriplet("#fff")).toBe("220 168 78");
+    expect(hexToRgbTriplet("not-a-color")).toBe("212 175 106");
+    expect(hexToRgbTriplet("#fff")).toBe("212 175 106");
   });
 });

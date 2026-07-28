@@ -28,7 +28,7 @@ type StoreContextValue = {
   reload: () => void;
 };
 
-const DEFAULT_ACCENT_COLOR = "#DCA84E";
+const DEFAULT_ACCENT_COLOR = "#D4AF6A";
 
 const StoreContext = createContext<StoreContextValue>({
   storeId: null,

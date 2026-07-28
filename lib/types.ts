@@ -149,7 +149,7 @@ export function tabTotal(
 }
 
 // "#RRGGBB" → "R G B"（TailwindのCSS変数カラーに渡すための形式）。不正な値なら既定のゴールドにフォールバック
-export function hexToRgbTriplet(hex: string, fallback = "220 168 78"): string {
+export function hexToRgbTriplet(hex: string, fallback = "212 175 106"): string {
   const match = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
   if (!match) return fallback;
   const n = parseInt(match[1], 16);

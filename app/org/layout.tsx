@@ -14,10 +14,16 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3">
+      <div className="sticky top-0 z-10 border-b border-line bg-bg2/80 backdrop-blur-xl px-4 py-3.5">
         <div className="flex items-center justify-between">
-          <div className="text-gold font-bold text-sm tracking-wide">組織ダッシュボード</div>
-          <button onClick={handleLogout} className="text-xs text-gray-400 border border-line rounded-md px-2 py-1">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-gold shrink-0" />
+            <span className="font-bold text-[15px] tracking-tight">組織ダッシュボード</span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-gray-400 border border-line rounded-lg px-2.5 py-1.5 hover:text-gray-200 transition-colors"
+          >
             ログアウト
           </button>
         </div>

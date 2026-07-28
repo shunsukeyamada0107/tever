@@ -9,10 +9,43 @@ import { hexToRgbTriplet } from "@/lib/types";
 import { THEME_PRESETS } from "@/lib/theme";
 
 const TABS = [
-  { href: "/dashboard", label: "伝票" },
-  { href: "/dashboard/expenses", label: "経費" },
-  { href: "/dashboard/report", label: "集計" },
-  { href: "/dashboard/settings", label: "設定" },
+  {
+    href: "/dashboard",
+    label: "伝票",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 13h6V4H4v9zM14 20h6V4h-6v16zM4 20h6v-4H4v4z" />
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/expenses",
+    label: "経費",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18M3 12h18M3 18h18" />
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/report",
+    label: "集計",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 20V10M12 20V4M20 20v-7" />
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/settings",
+    label: "設定",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z" />
+      </svg>
+    ),
+  },
 ];
 
 // 店舗ごとのブランドカラー・テーマ（明/暗）を、CSS変数として:rootに反映する
@@ -48,11 +81,17 @@ function HeaderBar() {
   }
 
   return (
-    <div className="sticky top-0 z-10 border-b border-line bg-bg2/90 backdrop-blur px-4 py-3 flex items-center justify-between">
-      <div className="text-gold font-bold text-sm tracking-wide">
-        {loading ? "読み込み中..." : storeName ?? "店舗未設定"}
+    <div className="sticky top-0 z-10 border-b border-line bg-bg2/80 backdrop-blur-xl px-4 py-3.5 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className="w-2 h-2 rounded-full bg-gold shrink-0" />
+        <span className="font-bold text-[15px] tracking-tight">
+          {loading ? "読み込み中..." : storeName ?? "店舗未設定"}
+        </span>
       </div>
-      <button onClick={handleLogout} className="text-xs text-gray-400 border border-line rounded-md px-2 py-1">
+      <button
+        onClick={handleLogout}
+        className="text-xs text-gray-400 border border-line rounded-lg px-2.5 py-1.5 hover:text-gray-200 transition-colors"
+      >
         ログアウト
       </button>
     </div>
@@ -68,18 +107,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <ThemeStyle />
           <HeaderBar />
           <main className="p-4">{children}</main>
-          <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/95 backdrop-blur">
-            {TABS.map((tab) => (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`flex-1 text-center py-3 text-xs font-bold ${
-                  pathname === tab.href ? "text-gold" : "text-gray-400"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            ))}
+          <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+            {TABS.map((tab) => {
+              const on = pathname === tab.href;
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[10.5px] font-semibold transition-colors ${
+                    on ? "text-gold" : "text-gray-500"
+                  }`}
+                >
+                  <span className="w-[22px] h-[22px]">{tab.icon}</span>
+                  {tab.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </BusinessDateProvider>

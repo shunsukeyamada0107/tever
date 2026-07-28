@@ -9,6 +9,15 @@ import { StoreTheme } from "@/lib/theme";
 
 const CUTOFF_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
+const ACCENT_PRESETS = [
+  { name: "Gold", hex: "#D4AF6A" },
+  { name: "Purple", hex: "#9B7FE8" },
+  { name: "Blue", hex: "#5B9EF3" },
+  { name: "Red", hex: "#E5636B" },
+  { name: "Pink", hex: "#E579A3" },
+  { name: "Carbon", hex: "#C7CDD6" },
+] as const;
+
 export default function SettingsPage() {
   const supabase = createClient();
   const {
@@ -345,6 +354,23 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1">ブランドカラー（アプリ内の強調色）</label>
+            <div className="flex items-center gap-2.5 mb-2.5">
+              {ACCENT_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => setAccentColorDraft(preset.hex)}
+                  aria-label={preset.name}
+                  aria-pressed={accentColorDraft.toLowerCase() === preset.hex.toLowerCase()}
+                  className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                    accentColorDraft.toLowerCase() === preset.hex.toLowerCase()
+                      ? "border-white/85 scale-110"
+                      : "border-transparent"
+                  }`}
+                  style={{ background: preset.hex }}
+                />
+              ))}
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="color"
@@ -353,6 +379,7 @@ export default function SettingsPage() {
                 className="w-10 h-9 rounded-md bg-bg2 border border-line p-0.5 cursor-pointer"
               />
               <span className="text-xs text-gray-400 font-mono">{accentColorDraft}</span>
+              <span className="text-xs text-gray-500">（自由に色を指定することもできます）</span>
             </div>
           </div>
           <div>

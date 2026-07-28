@@ -447,23 +447,23 @@ function POSPageInner() {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => settleTab("cash")}
-              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
             >
-              <span className="text-2xl leading-none">💴</span>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 7h20M2 17h20M6 12h.01M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /></svg>
               現金で会計
             </button>
             <button
               onClick={() => settleTab("card")}
-              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
             >
-              <span className="text-2xl leading-none">💳</span>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
               カードで会計
             </button>
           </div>
         ) : (
           <button
             onClick={reopenTab}
-            className="w-full rounded-xl border-2 border-line py-3 text-sm font-bold text-gray-300"
+            className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
           >
             会計を取り消す
           </button>
@@ -472,11 +472,39 @@ function POSPageInner() {
     );
   }
 
+  const todaySalesTotal = closedTabs.reduce(
+    (a, t) => a + tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount),
+    0
+  );
+
   return (
     <div className="space-y-4">
       <DateBar />
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-xl border border-line bg-elevated px-3.5 py-3">
+          <div className="text-[10.5px] font-semibold text-gray-500">本日の売上（会計済み）</div>
+          <div className="text-lg font-bold text-gold mt-1 font-mono">¥{todaySalesTotal.toLocaleString()}</div>
+        </div>
+        <div className="rounded-xl border border-line bg-elevated px-3.5 py-3">
+          <div className="text-[10.5px] font-semibold text-gray-500">対応中テーブル</div>
+          <div className="text-lg font-bold mt-1 font-mono">{openTabs.length}卓</div>
+        </div>
+      </div>
+
+      <button
+        onClick={openCreateModal}
+        className="w-full rounded-xl px-4 py-4 text-[15px] font-bold bg-gold text-bg shadow-premium active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        新規伝票を作成
+      </button>
+
       <div>
-        <div className="text-gold font-bold text-sm mb-2">伝票（お客様・卓）・対応中 {openTabs.length}件</div>
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[13px] font-bold text-gray-300">対応中のテーブル</span>
+          <span className="text-xs text-gray-500">{openTabs.length}卓</span>
+        </div>
         {openTabs.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             対応中の伝票はありません
@@ -493,22 +521,29 @@ function POSPageInner() {
                 <button
                   key={t.id}
                   onClick={() => setActiveTabId(t.id)}
-                  style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 5 }}
-                  className={`text-left rounded-xl px-3 py-2.5 border-2 ${
-                    active ? "bg-gold border-gold text-bg" : "bg-elevated border-line text-gray-200"
+                  style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 4 }}
+                  className={`text-left rounded-xl px-3.5 py-3 border transition-colors ${
+                    active
+                      ? "bg-gold/10 border-gold/50 text-gray-100"
+                      : "bg-elevated border-line text-gray-200"
                   }`}
                 >
-                  <div className="text-sm font-bold truncate">
-                    {t.name}
-                    {t.guest_count != null && <span className="font-normal"> ・{t.guest_count}名</span>}
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-sm font-bold truncate">{t.name}</span>
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-good shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-good" />
+                      対応中
+                    </span>
                   </div>
-                  <div className={`text-xs mt-0.5 truncate ${active ? "text-bg/70" : "text-gray-400"}`}>
-                    {name ? `👤${name} ・ ` : ""}⏱{elapsedMin}分
+                  <div className="text-xs mt-1 text-gray-400 truncate">
+                    {t.guest_count != null ? `${t.guest_count}名 ・ ` : ""}
+                    {name ? `${name} ・ ` : ""}
+                    {elapsedMin}分経過
                   </div>
-                  <div className={`text-sm font-mono font-bold mt-1 ${active ? "text-bg" : "text-gold"}`}>
+                  <div className="text-base font-mono font-bold mt-1.5 text-gold">
                     ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
                   </div>
-                  {lastOrder && <div className="text-xs font-bold mt-0.5 text-rose">⏰ ラストオーダー</div>}
+                  {lastOrder && <div className="text-[10.5px] font-bold mt-1 text-rose">⏰ ラストオーダー</div>}
                 </button>
               );
             })}
@@ -516,9 +551,9 @@ function POSPageInner() {
         )}
         <button
           onClick={openCreateModal}
-          className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-bold border-2 border-dashed border-gold text-gold"
+          className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-bold border border-dashed border-gold/50 text-gold"
         >
-          📝 伝票を作る
+          + 伝票を作る
         </button>
 
         {closedTabs.length > 0 && (
@@ -705,23 +740,23 @@ function POSPageInner() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => settleTab("cash")}
-                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
                 >
-                  <span className="text-2xl leading-none">💴</span>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 7h20M2 17h20M6 12h.01M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /></svg>
                   現金で会計
                 </button>
                 <button
                   onClick={() => settleTab("card")}
-                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1 active:scale-95 transition-transform"
+                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
                 >
-                  <span className="text-2xl leading-none">💳</span>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
                   カードで会計
                 </button>
               </div>
             ) : (
               <button
                 onClick={reopenTab}
-                className="w-full rounded-xl border-2 border-line py-3 text-sm font-bold text-gray-300"
+                className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
               >
                 会計を取り消す
               </button>
@@ -926,10 +961,10 @@ function POSPageInner() {
 
       <button
         onClick={openCreateModal}
-        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gold text-bg text-2xl font-bold shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gold text-bg shadow-premium flex items-center justify-center active:scale-95 transition-transform"
         aria-label="伝票を作る"
       >
-        ＋
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </button>
 
       {showCreateModal && (
