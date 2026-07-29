@@ -64,7 +64,7 @@ export default function POSPage() {
 function POSPageInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
-  const { storeId, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment } = useStore();
+  const { storeId, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment, enableNameSearch } = useStore();
   const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -126,7 +126,7 @@ function POSPageInner() {
 
   // 伝票作成モーダルで名前を入力した時、同じ名前の過去の伝票をあいまい検索する（デバウンス付き）
   useEffect(() => {
-    if (!showCreateModal || !storeId || !modalName.trim()) {
+    if (!showCreateModal || !storeId || !enableNameSearch || !modalName.trim()) {
       setNameSearchResults([]);
       setSearchingName(false);
       return;
@@ -146,7 +146,7 @@ function POSPageInner() {
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalName, showCreateModal, storeId]);
+  }, [modalName, showCreateModal, storeId, enableNameSearch]);
 
   // 集計タブなどから ?tab=<id> で遷移してきた場合、その伝票を自動で開く
   useEffect(() => {
@@ -1086,7 +1086,7 @@ function POSPageInner() {
                 placeholder="例：田中様・3卓"
                 className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
-              {modalName.trim() &&
+              {enableNameSearch && modalName.trim() &&
                 (searchingName ? (
                   <div className="text-xs text-gray-500 mt-1.5">検索中...</div>
                 ) : nameSearchResults.length > 0 ? (

@@ -36,6 +36,7 @@ export default function SettingsPage() {
     acceptsCard,
     acceptsPaypay,
     acceptsOtherEpayment,
+    enableNameSearch,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   const [acceptsCardDraft, setAcceptsCardDraft] = useState(acceptsCard);
   const [acceptsPaypayDraft, setAcceptsPaypayDraft] = useState(acceptsPaypay);
   const [acceptsOtherEpaymentDraft, setAcceptsOtherEpaymentDraft] = useState(acceptsOtherEpayment);
+  const [enableNameSearchDraft, setEnableNameSearchDraft] = useState(enableNameSearch);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -83,6 +85,7 @@ export default function SettingsPage() {
     setAcceptsCardDraft(acceptsCard);
     setAcceptsPaypayDraft(acceptsPaypay);
     setAcceptsOtherEpaymentDraft(acceptsOtherEpayment);
+    setEnableNameSearchDraft(enableNameSearch);
   }, [
     storeName,
     taxRate,
@@ -98,6 +101,7 @@ export default function SettingsPage() {
     acceptsCard,
     acceptsPaypay,
     acceptsOtherEpayment,
+    enableNameSearch,
   ]);
 
   const loadData = useCallback(async () => {
@@ -225,6 +229,7 @@ export default function SettingsPage() {
         accepts_card: acceptsCardDraft,
         accepts_paypay: acceptsPaypayDraft,
         accepts_other_epayment: acceptsOtherEpaymentDraft,
+        enable_name_search: enableNameSearchDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -458,6 +463,31 @@ export default function SettingsPage() {
             </div>
             <div className="text-xs text-gray-500 mt-1">
               2つ以上選ぶと、会計時にどれで支払われたか選ぶ画面が出ます。1つだけならそのまま会計されます。
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              伝票作成時に、同じ名前の過去の伝票を検索表示する
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEnableNameSearchDraft(true)}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  enableNameSearchDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                ON
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnableNameSearchDraft(false)}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  !enableNameSearchDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                OFF
+              </button>
             </div>
           </div>
           <div>

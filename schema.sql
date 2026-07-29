@@ -35,6 +35,7 @@ create table stores (
   accepts_card              boolean not null default true,  -- 電子決済としてカードを受け付けるか
   accepts_paypay            boolean not null default false, -- 電子決済としてPayPayを受け付けるか
   accepts_other_epayment    boolean not null default false, -- 電子決済としてその他（PayPay/カード以外）を受け付けるか
+  enable_name_search        boolean not null default true,  -- 伝票を作る画面で、同じ名前の過去の伝票を検索表示するか
   organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
   created_at                timestamptz not null default now()
 );
