@@ -138,7 +138,7 @@ function POSPageInner() {
         .from("tabs")
         .select("*, tab_items(*)")
         .eq("store_id", storeId)
-        .ilike("name", `%${query}%`)
+        .ilike("name", `${query}%`)
         .order("created_at", { ascending: false })
         .limit(5);
       setNameSearchResults((data as TabWithItems[]) ?? []);
