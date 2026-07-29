@@ -64,7 +64,8 @@ export default function POSPage() {
 function POSPageInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
-  const { storeId, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment, enableNameSearch } = useStore();
+  const { storeId, storeName, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment, enableNameSearch } =
+    useStore();
   const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -83,6 +84,7 @@ function POSPageInner() {
   const [now, setNow] = useState(Date.now());
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | null>(null);
   const [showEpaymentPicker, setShowEpaymentPicker] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const enabledEpaymentMethods: { method: PaymentMethod; label: string }[] = [
     ...(acceptsCard ? [{ method: "card" as const, label: PAYMENT_METHOD_LABELS.card }] : []),
@@ -431,6 +433,7 @@ function POSPageInner() {
       .update({ payment_method: method, closed_at: new Date().toISOString() })
       .eq("id", activeTab.id);
     loadData();
+    setShowReceipt(true);
   }
 
   async function reopenTab() {
@@ -488,12 +491,20 @@ function POSPageInner() {
   function renderPaymentButtons(tab: TabWithItems) {
     if (tab.closed_at) {
       return (
-        <button
-          onClick={reopenTab}
-          className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
-        >
-          会計を取り消す
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setShowReceipt(true)}
+            className="rounded-xl border border-gold text-gold py-3 text-sm font-bold"
+          >
+            🧾 レシートを表示
+          </button>
+          <button
+            onClick={reopenTab}
+            className="rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
+          >
+            会計を取り消す
+          </button>
+        </div>
       );
     }
 
@@ -1061,6 +1072,109 @@ function POSPageInner() {
               className="w-full rounded-md border border-line py-2 text-sm text-gray-400"
             >
               キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showReceipt && activeTab && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setShowReceipt(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+          >
+            <div className="text-center space-y-1">
+              <div className="text-gold font-bold text-lg">{storeName ?? "お会計"}</div>
+              {activeTab.closed_at && (
+                <div className="text-xs text-gray-400">
+                  {new Date(activeTab.closed_at).toLocaleString("ja-JP", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-dashed border-line" />
+
+            <div className="space-y-2.5">
+              {activeTab.tab_items.map((i) => (
+                <div key={i.id} className="flex justify-between gap-3 text-[15px]">
+                  <span className="text-gray-100">
+                    {i.name}
+                    {i.qty > 1 && <span className="text-gray-400"> × {i.qty}</span>}
+                  </span>
+                  <span className="font-mono font-bold shrink-0">¥{(i.price * i.qty).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-dashed border-line" />
+
+            <div className="space-y-1.5 text-[15px]">
+              <div className="flex justify-between text-gray-400">
+                <span>小計</span>
+                <span className="font-mono">¥{tabSubtotal(activeTab.tab_items).toLocaleString()}</span>
+              </div>
+              {!!(activeTab.discount_percent || activeTab.discount_amount) && (
+                <div className="flex justify-between text-rose">
+                  <span>割引{activeTab.discount_percent ? `（${activeTab.discount_percent}%OFF）` : ""}</span>
+                  <span className="font-mono">
+                    -¥
+                    {tabDiscountAmount(
+                      activeTab.tab_items,
+                      activeTab.discount_percent,
+                      activeTab.discount_amount
+                    ).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-400">
+                <span>消費税</span>
+                <span className="font-mono">
+                  ¥
+                  {tabTax(
+                    activeTab.tab_items,
+                    taxRate,
+                    activeTab.discount_percent,
+                    activeTab.discount_amount
+                  ).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-dashed border-line" />
+
+            <div className="flex justify-between items-baseline">
+              <span className="font-bold text-gray-200">合計</span>
+              <span className="font-mono font-bold text-gold text-3xl">
+                ¥
+                {tabTotal(
+                  activeTab.tab_items,
+                  taxRate,
+                  activeTab.discount_percent,
+                  activeTab.discount_amount
+                ).toLocaleString()}
+              </span>
+            </div>
+
+            {activeTab.payment_method && (
+              <div className="text-center text-xs text-gray-500">
+                {PAYMENT_METHOD_EMOJI[activeTab.payment_method]} {PAYMENT_METHOD_LABELS[activeTab.payment_method]}でお支払い
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowReceipt(false)}
+              className="w-full rounded-xl bg-gold text-bg py-3 text-sm font-bold"
+            >
+              閉じる
             </button>
           </div>
         </div>
