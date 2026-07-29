@@ -27,11 +27,6 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
-// カタカナ・数字・空白以外を打てないようにする（伝票名の入力を統一するため）
-function toKatakanaAndDigits(value: string) {
-  return value.replace(/[^ァ-ヶー0-9０-９\s]/g, "");
-}
-
 function CourseTimerBadge({ endsAt, now }: { endsAt: string; now: number }) {
   const remaining = new Date(endsAt).getTime() - now;
   if (remaining <= 0) {
@@ -1087,8 +1082,8 @@ function POSPageInner() {
               <input
                 autoFocus
                 value={modalName}
-                onChange={(e) => setModalName(toKatakanaAndDigits(e.target.value))}
-                placeholder="例：タナカ 3"
+                onChange={(e) => setModalName(e.target.value)}
+                placeholder="例：田中様・3卓"
                 className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
               {modalName.trim() &&
