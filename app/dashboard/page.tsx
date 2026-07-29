@@ -72,6 +72,8 @@ function POSPageInner() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState("");
+  const [nameSearchResults, setNameSearchResults] = useState<TabWithItems[]>([]);
+  const [searchingName, setSearchingName] = useState(false);
   const [modalGuestCount, setModalGuestCount] = useState("");
   const [modalStaffId, setModalStaffId] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState("");
@@ -121,6 +123,30 @@ function POSPageInner() {
     loadData();
     setActiveTabId(null);
   }, [loadData]);
+
+  // 伝票作成モーダルで名前を入力した時、同じ名前の過去の伝票をあいまい検索する（デバウンス付き）
+  useEffect(() => {
+    if (!showCreateModal || !storeId || !modalName.trim()) {
+      setNameSearchResults([]);
+      setSearchingName(false);
+      return;
+    }
+    const query = modalName.trim();
+    setSearchingName(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("tabs")
+        .select("*, tab_items(*)")
+        .eq("store_id", storeId)
+        .ilike("name", `%${query}%`)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      setNameSearchResults((data as TabWithItems[]) ?? []);
+      setSearchingName(false);
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalName, showCreateModal, storeId]);
 
   // 集計タブなどから ?tab=<id> で遷移してきた場合、その伝票を自動で開く
   useEffect(() => {
@@ -1060,6 +1086,41 @@ function POSPageInner() {
                 placeholder="例：田中様・3卓"
                 className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
+              {modalName.trim() &&
+                (searchingName ? (
+                  <div className="text-xs text-gray-500 mt-1.5">検索中...</div>
+                ) : nameSearchResults.length > 0 ? (
+                  <div className="mt-1.5 space-y-1.5">
+                    <div className="text-xs text-gray-500">同じ名前の過去の伝票</div>
+                    {nameSearchResults.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setModalName(t.name)}
+                        className="w-full text-left rounded-lg border border-line bg-bg2 px-3 py-2"
+                      >
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-sm font-bold text-gray-200 truncate">{t.name}</span>
+                          <span className="text-xs text-gray-500 shrink-0 ml-2">{t.business_date}</span>
+                        </div>
+                        <div className="flex justify-between mt-0.5">
+                          <span className="text-xs text-gray-400">{t.tab_items.length}品</span>
+                          <span className="text-xs font-mono text-gold font-bold">
+                            ¥
+                            {tabTotal(
+                              t.tab_items,
+                              taxRate,
+                              t.discount_percent,
+                              t.discount_amount
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 mt-1.5">一致する過去の伝票はありません</div>
+                ))}
             </div>
 
             <div>
