@@ -18,13 +18,29 @@ export type MenuItem = {
   is_cast_drink: boolean;
 };
 
+export type PaymentMethod = "cash" | "card" | "paypay" | "other_epayment";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "現金",
+  card: "カード",
+  paypay: "PayPay",
+  other_epayment: "その他電子決済",
+};
+
+export const PAYMENT_METHOD_EMOJI: Record<PaymentMethod, string> = {
+  cash: "💴",
+  card: "💳",
+  paypay: "📱",
+  other_epayment: "🔷",
+};
+
 export type Tab = {
   id: string;
   store_id: string;
   business_date: string;
   name: string;
   memo: string;
-  payment_method: "cash" | "card" | null;
+  payment_method: PaymentMethod | null;
   guest_count: number | null;
   course_ends_at: string | null;
   discount_percent: number | null;
@@ -350,7 +366,7 @@ export function daySummary(
   tabs.forEach((t) => {
     const tot = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
     if (t.closed_at && t.payment_method === "cash") cash += tot;
-    else if (t.closed_at && t.payment_method === "card") card += tot;
+    else if (t.closed_at && t.payment_method) card += tot; // カード・PayPay・その他電子決済はまとめて「現金以外」として集計
     else unsettled += tot;
   });
   // 合計は実際に会計する（100円単位切り上げ後の）金額を必ず使う：現金＋カード＋未会計と一致する

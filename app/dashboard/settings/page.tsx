@@ -33,6 +33,9 @@ export default function SettingsPage() {
     drinkBackAmount,
     theme,
     showInsights,
+    acceptsCard,
+    acceptsPaypay,
+    acceptsOtherEpayment,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -55,6 +58,9 @@ export default function SettingsPage() {
   const [accentColorDraft, setAccentColorDraft] = useState(accentColor);
   const [themeDraft, setThemeDraft] = useState<StoreTheme>(theme);
   const [showInsightsDraft, setShowInsightsDraft] = useState(showInsights);
+  const [acceptsCardDraft, setAcceptsCardDraft] = useState(acceptsCard);
+  const [acceptsPaypayDraft, setAcceptsPaypayDraft] = useState(acceptsPaypay);
+  const [acceptsOtherEpaymentDraft, setAcceptsOtherEpaymentDraft] = useState(acceptsOtherEpayment);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -74,6 +80,9 @@ export default function SettingsPage() {
     setDrinkBackAmountDraft(String(drinkBackAmount));
     setThemeDraft(theme);
     setShowInsightsDraft(showInsights);
+    setAcceptsCardDraft(acceptsCard);
+    setAcceptsPaypayDraft(acceptsPaypay);
+    setAcceptsOtherEpaymentDraft(acceptsOtherEpayment);
   }, [
     storeName,
     taxRate,
@@ -86,6 +95,9 @@ export default function SettingsPage() {
     drinkBackAmount,
     theme,
     showInsights,
+    acceptsCard,
+    acceptsPaypay,
+    acceptsOtherEpayment,
   ]);
 
   const loadData = useCallback(async () => {
@@ -210,6 +222,9 @@ export default function SettingsPage() {
         drink_back_amount: Number(drinkBackAmountDraft) || 0,
         theme: themeDraft,
         show_insights: showInsightsDraft,
+        accepts_card: acceptsCardDraft,
+        accepts_paypay: acceptsPaypayDraft,
+        accepts_other_epayment: acceptsOtherEpaymentDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -403,6 +418,46 @@ export default function SettingsPage() {
               >
                 ☀️ ライト（白背景）
               </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              現金以外に受け付ける決済方法（会計時にボタンとして表示されます）
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setAcceptsCardDraft((v) => !v)}
+                aria-pressed={acceptsCardDraft}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  acceptsCardDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                💳 カード
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcceptsPaypayDraft((v) => !v)}
+                aria-pressed={acceptsPaypayDraft}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  acceptsPaypayDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                📱 PayPay
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcceptsOtherEpaymentDraft((v) => !v)}
+                aria-pressed={acceptsOtherEpaymentDraft}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  acceptsOtherEpaymentDraft ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                🔷 その他電子決済
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              2つ以上選ぶと、会計時にどれで支払われたか選ぶ画面が出ます。1つだけならそのまま会計されます。
             </div>
           </div>
           <div>

@@ -24,6 +24,9 @@ type StoreContextValue = {
   drinkBackAmount: number;
   theme: StoreTheme;
   showInsights: boolean;
+  acceptsCard: boolean;
+  acceptsPaypay: boolean;
+  acceptsOtherEpayment: boolean;
   loading: boolean;
   reload: () => void;
 };
@@ -43,6 +46,9 @@ const StoreContext = createContext<StoreContextValue>({
   drinkBackAmount: DEFAULT_DRINK_BACK_AMOUNT,
   theme: "dark",
   showInsights: true,
+  acceptsCard: true,
+  acceptsPaypay: false,
+  acceptsOtherEpayment: false,
   loading: true,
   reload: () => {},
 });
@@ -61,6 +67,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [drinkBackAmount, setDrinkBackAmount] = useState(DEFAULT_DRINK_BACK_AMOUNT);
   const [theme, setTheme] = useState<StoreTheme>("dark");
   const [showInsights, setShowInsights] = useState(true);
+  const [acceptsCard, setAcceptsCard] = useState(true);
+  const [acceptsPaypay, setAcceptsPaypay] = useState(false);
+  const [acceptsOtherEpayment, setAcceptsOtherEpayment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -77,7 +86,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: member } = await supabase
         .from("store_members")
         .select(
-          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme, show_insights)"
+          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme, show_insights, accepts_card, accepts_paypay, accepts_other_epayment)"
         )
         .eq("user_id", userData.user.id)
         .limit(1)
@@ -97,6 +106,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           drink_back_amount: number | null;
           theme: StoreTheme | null;
           show_insights: boolean | null;
+          accepts_card: boolean | null;
+          accepts_paypay: boolean | null;
+          accepts_other_epayment: boolean | null;
         };
         const stores = member.stores as unknown as StoreRow | StoreRow[] | null;
         const store = Array.isArray(stores) ? stores[0] : stores;
@@ -111,6 +123,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setDrinkBackAmount(store?.drink_back_amount ?? DEFAULT_DRINK_BACK_AMOUNT);
         setTheme(store?.theme ?? "dark");
         setShowInsights(store?.show_insights ?? true);
+        setAcceptsCard(store?.accepts_card ?? true);
+        setAcceptsPaypay(store?.accepts_paypay ?? false);
+        setAcceptsOtherEpayment(store?.accepts_other_epayment ?? false);
       }
       setLoading(false);
     }
@@ -132,6 +147,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         drinkBackAmount,
         theme,
         showInsights,
+        acceptsCard,
+        acceptsPaypay,
+        acceptsOtherEpayment,
         loading,
         reload,
       }}

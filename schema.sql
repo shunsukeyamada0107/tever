@@ -32,6 +32,9 @@ create table stores (
   accent_color              text not null default '#DCA84E', -- 店舗ごとのブランドカラー（アプリのゴールド部分に反映）
   theme                     text not null default 'dark' check (theme in ('dark','light')), -- 店舗ごとの画面テーマ
   show_insights             boolean not null default true, -- 集計タブの「気づき」セクションを表示するか
+  accepts_card              boolean not null default true,  -- 電子決済としてカードを受け付けるか
+  accepts_paypay            boolean not null default false, -- 電子決済としてPayPayを受け付けるか
+  accepts_other_epayment    boolean not null default false, -- 電子決済としてその他（PayPay/カード以外）を受け付けるか
   organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
   created_at                timestamptz not null default now()
 );
@@ -98,7 +101,7 @@ create table tabs (
   business_date   date not null,      -- 朝6時基準の営業日
   name            text not null,      -- お客様名・卓番
   memo            text not null default '',
-  payment_method  text check (payment_method in ('cash','card')),
+  payment_method  text check (payment_method in ('cash','card','paypay','other_epayment')),
   guest_count     integer,                             -- 人数（任意）
   course_ends_at  timestamptz,                          -- 飲み放題等コースの終了予定時刻（任意）
   discount_percent numeric,                             -- 割引率（例: 30 = 30%OFF、任意）

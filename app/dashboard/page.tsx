@@ -8,6 +8,9 @@ import { useBusinessDate } from "@/lib/BusinessDateContext";
 import { DateBar } from "@/lib/DateBar";
 import {
   MenuItem,
+  PAYMENT_METHOD_EMOJI,
+  PAYMENT_METHOD_LABELS,
+  PaymentMethod,
   Staff,
   TabItem,
   TabWithItems,
@@ -61,7 +64,7 @@ export default function POSPage() {
 function POSPageInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
-  const { storeId, taxRate } = useStore();
+  const { storeId, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment } = useStore();
   const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -77,6 +80,15 @@ function POSPageInner() {
   const [manualDiscount, setManualDiscount] = useState("");
   const [now, setNow] = useState(Date.now());
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | null>(null);
+  const [showEpaymentPicker, setShowEpaymentPicker] = useState(false);
+
+  const enabledEpaymentMethods: { method: PaymentMethod; label: string }[] = [
+    ...(acceptsCard ? [{ method: "card" as const, label: PAYMENT_METHOD_LABELS.card }] : []),
+    ...(acceptsPaypay ? [{ method: "paypay" as const, label: PAYMENT_METHOD_LABELS.paypay }] : []),
+    ...(acceptsOtherEpayment
+      ? [{ method: "other_epayment" as const, label: PAYMENT_METHOD_LABELS.other_epayment }]
+      : []),
+  ];
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -382,11 +394,12 @@ function POSPageInner() {
     loadData();
   }
 
-  async function settleTab(method: "cash" | "card") {
+  async function settleTab(method: PaymentMethod) {
     if (!activeTab) return;
     const amount = tabTotal(activeTab.tab_items, taxRate, activeTab.discount_percent, activeTab.discount_amount);
-    const methodLabel = method === "cash" ? "現金" : "カード";
+    const methodLabel = PAYMENT_METHOD_LABELS[method];
     if (!confirm(`${methodLabel}で ¥${amount.toLocaleString()} を会計しますか？`)) return;
+    setShowEpaymentPicker(false);
     await supabase
       .from("tabs")
       .update({ payment_method: method, closed_at: new Date().toISOString() })
@@ -413,6 +426,84 @@ function POSPageInner() {
 
   const openTabs = tabs.filter((t) => !t.closed_at);
   const closedTabs = tabs.filter((t) => t.closed_at);
+
+  function paymentIcon(method: PaymentMethod) {
+    switch (method) {
+      case "cash":
+        return (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M2 7h20M2 17h20M6 12h.01M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+          </svg>
+        );
+      case "card":
+        return (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <path d="M2 10h20" />
+          </svg>
+        );
+      case "paypay":
+        return (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="7" y="2" width="10" height="20" rx="2" />
+            <path d="M11 18h2" />
+          </svg>
+        );
+      case "other_epayment":
+        return (
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M3 12c1.8-2.6 3.6-2.6 5.4 0s3.6 2.6 5.4 0 3.6-2.6 5.4 0" />
+            <path d="M3 17c1.8-2.6 3.6-2.6 5.4 0s3.6 2.6 5.4 0 3.6-2.6 5.4 0" />
+          </svg>
+        );
+    }
+  }
+
+  function renderPaymentButtons(tab: TabWithItems) {
+    if (tab.closed_at) {
+      return (
+        <button
+          onClick={reopenTab}
+          className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
+        >
+          会計を取り消す
+        </button>
+      );
+    }
+
+    const single = enabledEpaymentMethods.length === 1 ? enabledEpaymentMethods[0] : null;
+    const multiple = enabledEpaymentMethods.length > 1;
+
+    return (
+      <div className={`grid gap-3 ${single || multiple ? "grid-cols-2" : "grid-cols-1"}`}>
+        <button
+          onClick={() => settleTab("cash")}
+          className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
+        >
+          {paymentIcon("cash")}
+          現金で会計
+        </button>
+        {single && (
+          <button
+            onClick={() => settleTab(single.method)}
+            className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
+          >
+            {paymentIcon(single.method)}
+            {single.label}で会計
+          </button>
+        )}
+        {multiple && (
+          <button
+            onClick={() => setShowEpaymentPicker(true)}
+            className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
+          >
+            {paymentIcon("card")}
+            電子決済で会計
+          </button>
+        )}
+      </div>
+    );
+  }
 
   function renderCheckoutSummary(tab: TabWithItems) {
     return (
@@ -443,31 +534,7 @@ function POSPageInner() {
           </div>
         </div>
 
-        {!tab.closed_at ? (
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => settleTab("cash")}
-              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 7h20M2 17h20M6 12h.01M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /></svg>
-              現金で会計
-            </button>
-            <button
-              onClick={() => settleTab("card")}
-              className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
-              カードで会計
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={reopenTab}
-            className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
-          >
-            会計を取り消す
-          </button>
-        )}
+        {renderPaymentButtons(tab)}
       </div>
     );
   }
@@ -572,7 +639,7 @@ function POSPageInner() {
                     } bg-elevated`}
                   >
                     <div className="text-sm font-bold truncate">
-                      {t.payment_method === "cash" ? "💴" : "💳"} {t.name}
+                      {t.payment_method ? PAYMENT_METHOD_EMOJI[t.payment_method] : "💴"} {t.name}
                     </div>
                     <div className="text-xs font-mono mt-0.5">
                       ¥{tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount).toLocaleString()}
@@ -736,31 +803,7 @@ function POSPageInner() {
               </div>
             )}
 
-            {!activeTab.closed_at ? (
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => settleTab("cash")}
-                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
-                >
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 7h20M2 17h20M6 12h.01M2 5h20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /></svg>
-                  現金で会計
-                </button>
-                <button
-                  onClick={() => settleTab("card")}
-                  className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
-                >
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
-                  カードで会計
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={reopenTab}
-                className="w-full rounded-xl border border-line py-3 text-sm font-bold text-gray-300"
-              >
-                会計を取り消す
-              </button>
-            )}
+            {renderPaymentButtons(activeTab)}
 
             <div className="flex gap-2 pt-1">
               <input
@@ -966,6 +1009,36 @@ function POSPageInner() {
       >
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </button>
+
+      {showEpaymentPicker && activeTab && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setShowEpaymentPicker(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-4 space-y-2.5"
+          >
+            <div className="text-gold font-bold text-base mb-1">電子決済の種類を選択</div>
+            {enabledEpaymentMethods.map((m) => (
+              <button
+                key={m.method}
+                onClick={() => settleTab(m.method)}
+                className="w-full rounded-xl border border-line py-3.5 text-sm font-bold text-gray-100 flex items-center justify-center gap-2"
+              >
+                {paymentIcon(m.method)}
+                {m.label}で会計
+              </button>
+            ))}
+            <button
+              onClick={() => setShowEpaymentPicker(false)}
+              className="w-full rounded-md border border-line py-2 text-sm text-gray-400"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCreateModal && (
         <div

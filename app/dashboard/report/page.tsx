@@ -14,6 +14,8 @@ import {
   DaySummary,
   HourlyLaborRow,
   StaffCommission,
+  PAYMENT_METHOD_EMOJI,
+  PAYMENT_METHOD_LABELS,
   tabSubtotal,
   tabTax,
   tabTotal,
@@ -522,7 +524,7 @@ export default function ReportPage() {
           name: t.name,
           staff: staffName(t.staff_id),
           status: t.closed_at ? "会計済み" : "対応中",
-          method: t.payment_method ?? "",
+          method: t.payment_method ? PAYMENT_METHOD_LABELS[t.payment_method] : "",
           in: new Date(t.created_at).toLocaleTimeString("ja-JP"),
           out: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
           count: t.tab_items.reduce((a, x) => a + x.qty, 0),
@@ -774,7 +776,7 @@ export default function ReportPage() {
                 className="w-full flex justify-between items-center px-3 py-2 text-sm text-left active:bg-bg2"
               >
                 <span className="text-gray-300">
-                  {t.closed_at ? (t.payment_method === "cash" ? "💴" : "💳") : "🕐"} {t.name}
+                  {t.closed_at ? (t.payment_method ? PAYMENT_METHOD_EMOJI[t.payment_method] : "💴") : "🕐"} {t.name}
                   <span className="text-xs text-gray-500"> ・👤{staffName(t.staff_id)}</span>
                 </span>
                 <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}</span>
