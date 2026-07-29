@@ -6,7 +6,6 @@ import {
   roundUpTo100,
   tabSubtotal,
   tabDiscountAmount,
-  tabTaxableSubtotal,
   tabTax,
   tabTotal,
   businessDateFor,
@@ -74,16 +73,18 @@ describe("tab subtotal / discount / tax / total", () => {
     expect(tabSubtotal(items)).toBe(2500);
   });
 
-  it("applies percent discount, capped at the subtotal", () => {
+  it("applies percent discount against the tax-included total, capped there", () => {
+    // 小計1000・消費税100・割引前合計1100 に対して割引をかける（小計に対してではない）
     const items = [item({ price: 1000, qty: 1 })];
-    expect(tabDiscountAmount(items, 30, null)).toBe(300);
-    expect(tabDiscountAmount(items, 150, null)).toBe(1000); // 割引が売上を超えない
+    expect(tabDiscountAmount(items, 0.1, 30, null)).toBe(330); // 1100 * 30% = 330
+    expect(tabDiscountAmount(items, 0.1, 150, null)).toBe(1100); // 割引が割引前合計を超えない
   });
 
-  it("combines percent and fixed discount", () => {
+  it("combines percent and fixed discount against the total", () => {
+    // 小計10000・消費税1000・割引前合計11000
     const items = [item({ price: 10000, qty: 1 })];
-    expect(tabDiscountAmount(items, 30, 500)).toBe(3500);
-    expect(tabTaxableSubtotal(items, 30, 500)).toBe(6500);
+    expect(tabDiscountAmount(items, 0.1, 30, 500)).toBe(3800); // 11000*30% + 500
+    expect(tabTotal(items, 0.1, 30, 500)).toBe(7200); // roundUpTo100(11000-3800)
   });
 
   it("rounds tax to the nearest yen and total up to 100 yen", () => {

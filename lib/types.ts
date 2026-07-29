@@ -117,34 +117,27 @@ export function tabSubtotal(items: TabItem[]) {
   return items.reduce((a, i) => a + itemSubtotal(i), 0);
 }
 
-// 割引額（％割引 + 自由入力の値引き額の合計。税抜小計を超えない）
+// 消費税は割引前の小計に対して計算する（割引は合計から差し引く方式のため）
+export function tabTax(items: TabItem[], taxRate: number = DEFAULT_TAX_RATE) {
+  return Math.round(tabSubtotal(items) * taxRate);
+}
+
+// 割引前の合計（税込）＝ 小計＋消費税
+export function tabPreDiscountTotal(items: TabItem[], taxRate: number = DEFAULT_TAX_RATE) {
+  return tabSubtotal(items) + tabTax(items, taxRate);
+}
+
+// 割引額（％割引 + 自由入力の値引き額の合計。割引前の合計（税込）を超えない）
 export function tabDiscountAmount(
-  items: TabItem[],
-  discountPercent: number | null | undefined,
-  discountAmount: number | null | undefined = null
-) {
-  const sub = tabSubtotal(items);
-  const percentPart = discountPercent ? Math.round(sub * (discountPercent / 100)) : 0;
-  const fixedPart = discountAmount ?? 0;
-  return Math.min(sub, percentPart + fixedPart);
-}
-
-// 割引後の税抜小計（消費税の計算対象）
-export function tabTaxableSubtotal(
-  items: TabItem[],
-  discountPercent: number | null | undefined,
-  discountAmount: number | null | undefined = null
-) {
-  return tabSubtotal(items) - tabDiscountAmount(items, discountPercent, discountAmount);
-}
-
-export function tabTax(
   items: TabItem[],
   taxRate: number = DEFAULT_TAX_RATE,
   discountPercent: number | null | undefined = null,
   discountAmount: number | null | undefined = null
 ) {
-  return Math.round(tabTaxableSubtotal(items, discountPercent, discountAmount) * taxRate);
+  const preDiscountTotal = tabPreDiscountTotal(items, taxRate);
+  const percentPart = discountPercent ? Math.round(preDiscountTotal * (discountPercent / 100)) : 0;
+  const fixedPart = discountAmount ?? 0;
+  return Math.min(preDiscountTotal, percentPart + fixedPart);
 }
 
 // 会計時の端数は100円単位で切り上げる（例: 1120円→1200円）
@@ -158,9 +151,7 @@ export function tabTotal(
   discountPercent: number | null | undefined = null,
   discountAmount: number | null | undefined = null
 ) {
-  const raw =
-    tabTaxableSubtotal(items, discountPercent, discountAmount) +
-    tabTax(items, taxRate, discountPercent, discountAmount);
+  const raw = tabPreDiscountTotal(items, taxRate) - tabDiscountAmount(items, taxRate, discountPercent, discountAmount);
   return roundUpTo100(raw);
 }
 
@@ -257,9 +248,7 @@ export function staffCommissionBreakdown(
     const sub = tabSubtotal(t.tab_items);
     if (sub <= 0) return;
 
-    const taxableSubtotal = tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount);
     const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
-    const discountFactor = taxableSubtotal / sub;
 
     // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定・歩合対象外は集計しない）
     const byStaff: Record<string, number> = {};
@@ -276,8 +265,7 @@ export function staffCommissionBreakdown(
     });
 
     Object.entries(byStaff).forEach(([key, rawSub]) => {
-      const discountedSub = rawSub * discountFactor;
-      const shareRatio = taxableSubtotal > 0 ? discountedSub / taxableSubtotal : 0;
+      const shareRatio = rawSub / sub;
       const salesWithTax = actualTotal * shareRatio;
 
       if (!map[key]) {
@@ -292,13 +280,12 @@ export function staffCommissionBreakdown(
           commission: 0,
         };
       }
-      map[key].salesExTax += discountedSub;
+      map[key].salesExTax += rawSub;
       map[key].salesWithTax += salesWithTax;
 
       if (scheme === "drink_back") {
         const drinkQty = byStaffDrinkQty[key] ?? 0;
-        const drinkDiscountedSub = (byStaffDrink[key] ?? 0) * discountFactor;
-        const drinkShareRatio = taxableSubtotal > 0 ? drinkDiscountedSub / taxableSubtotal : 0;
+        const drinkShareRatio = (byStaffDrink[key] ?? 0) / sub;
         const drinkSalesWithTax = actualTotal * drinkShareRatio;
         const salesBack = Math.max(0, salesWithTax - drinkSalesWithTax) * commissionRate;
         const drinkBack = drinkQty * drinkBackAmount;
@@ -340,11 +327,8 @@ export function daySummary(
   drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT,
   isCommissionEligible: (staffId: string) => boolean = () => true
 ): DaySummary {
-  const subtotal = tabs.reduce(
-    (a, t) => a + tabTaxableSubtotal(t.tab_items, t.discount_percent, t.discount_amount),
-    0
-  );
-  const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount), 0);
+  const subtotal = tabs.reduce((a, t) => a + tabSubtotal(t.tab_items), 0);
+  const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate), 0);
   const laborHourly = dayLaborCost(attendance);
   const commissionTotal = staffCommissionBreakdown(
     tabs,

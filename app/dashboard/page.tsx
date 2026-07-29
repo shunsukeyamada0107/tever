@@ -557,13 +557,19 @@ function POSPageInner() {
                 {tab.discount_percent ? `（${tab.discount_percent}%OFF）` : ""}
               </span>
               <span>
-                -¥{tabDiscountAmount(tab.tab_items, tab.discount_percent, tab.discount_amount).toLocaleString()}
+                -¥
+                {tabDiscountAmount(
+                  tab.tab_items,
+                  taxRate,
+                  tab.discount_percent,
+                  tab.discount_amount
+                ).toLocaleString()}
               </span>
             </div>
           )}
           <div className="flex justify-between text-gray-400">
             <span>消費税</span>
-            <span>¥{tabTax(tab.tab_items, taxRate, tab.discount_percent, tab.discount_amount).toLocaleString()}</span>
+            <span>¥{tabTax(tab.tab_items, taxRate).toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-gold font-bold text-lg pt-1 border-t border-dashed border-line">
             <span>合計</span>
@@ -757,6 +763,7 @@ function POSPageInner() {
                     -¥
                     {tabDiscountAmount(
                       activeTab.tab_items,
+                      taxRate,
                       activeTab.discount_percent,
                       activeTab.discount_amount
                     ).toLocaleString()}
@@ -765,15 +772,7 @@ function POSPageInner() {
               )}
               <div className="flex justify-between text-gray-400">
                 <span>消費税</span>
-                <span>
-                  ¥
-                  {tabTax(
-                    activeTab.tab_items,
-                    taxRate,
-                    activeTab.discount_percent,
-                    activeTab.discount_amount
-                  ).toLocaleString()}
-                </span>
+                <span>¥{tabTax(activeTab.tab_items, taxRate).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gold font-bold text-lg pt-1 border-t border-dashed border-line">
                 <span>合計</span>
@@ -1129,6 +1128,7 @@ function POSPageInner() {
                     -¥
                     {tabDiscountAmount(
                       activeTab.tab_items,
+                      taxRate,
                       activeTab.discount_percent,
                       activeTab.discount_amount
                     ).toLocaleString()}
@@ -1137,15 +1137,7 @@ function POSPageInner() {
               )}
               <div className="flex justify-between text-gray-400">
                 <span>消費税</span>
-                <span className="font-mono">
-                  ¥
-                  {tabTax(
-                    activeTab.tab_items,
-                    taxRate,
-                    activeTab.discount_percent,
-                    activeTab.discount_amount
-                  ).toLocaleString()}
-                </span>
+                <span className="font-mono">¥{tabTax(activeTab.tab_items, taxRate).toLocaleString()}</span>
               </div>
             </div>
 

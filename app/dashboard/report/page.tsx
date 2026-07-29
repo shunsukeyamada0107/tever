@@ -529,7 +529,7 @@ export default function ReportPage() {
           out: t.closed_at ? new Date(t.closed_at).toLocaleTimeString("ja-JP") : "",
           count: t.tab_items.reduce((a, x) => a + x.qty, 0),
           subtotal: Math.round(tabSubtotal(t.tab_items)),
-          tax: Math.round(tabTax(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
+          tax: Math.round(tabTax(t.tab_items, taxRate)),
           total: Math.round(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount)),
         });
         row.getCell("subtotal").numFmt = '"¥"#,##0';
