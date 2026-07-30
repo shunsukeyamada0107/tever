@@ -7,6 +7,7 @@ import { useStore } from "@/lib/StoreContext";
 import { useBusinessDate } from "@/lib/BusinessDateContext";
 import { DateBar } from "@/lib/DateBar";
 import {
+  categoryColorFor,
   MenuItem,
   PAYMENT_METHOD_EMOJI,
   PAYMENT_METHOD_LABELS,
@@ -19,6 +20,7 @@ import {
   tabSubtotal,
   tabTax,
   tabTotal,
+  UNCATEGORIZED_LABEL,
 } from "@/lib/types";
 
 const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
@@ -181,6 +183,22 @@ function POSPageInner() {
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission | null>(null);
   const [showEpaymentPicker, setShowEpaymentPicker] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [lastAction, setLastAction] = useState<{ tabId: string; label: string; run: () => void } | null>(null);
+  const lastActionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function pushUndo(tabId: string, label: string, run: () => void) {
+    if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
+    setLastAction({ tabId, label, run });
+    lastActionTimeoutRef.current = setTimeout(() => setLastAction(null), 8000);
+  }
+
+  function performUndo() {
+    if (!lastAction) return;
+    if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
+    lastAction.run();
+    setLastAction(null);
+  }
 
   const enabledEpaymentMethods: { method: PaymentMethod; label: string }[] = [
     ...(acceptsCard ? [{ method: "card" as const, label: PAYMENT_METHOD_LABELS.card }] : []),
@@ -322,9 +340,28 @@ function POSPageInner() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
+  // メニューをカテゴリごとに分類。カテゴリ未設定は「その他」扱いで、メニューの並び順（sort_order）通りに出現順でタブ化する
+  const menuCategories: string[] = [];
+  for (const m of menu) {
+    const cat = m.category?.trim() || UNCATEGORIZED_LABEL;
+    if (!menuCategories.includes(cat)) menuCategories.push(cat);
+  }
+  const showCategoryTabs = menuCategories.length > 1;
+  const currentCategory = showCategoryTabs ? activeCategory ?? menuCategories[0] : null;
+  const quickPickItems = menu.filter((m) => m.is_quick_pick);
+  const categoryMenuItems = showCategoryTabs
+    ? menu.filter((m) => (m.category?.trim() || UNCATEGORIZED_LABEL) === currentCategory)
+    : menu;
+
   useEffect(() => {
     setMemoDraft(activeTab?.memo ?? "");
   }, [activeTab?.id, activeTab?.memo]);
+
+  // 別の伝票に切り替えたら、直前の「元に戻す」は文脈が変わるので消す
+  useEffect(() => {
+    setLastAction(null);
+    if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
+  }, [activeTabId]);
 
   function staffName(staffId: string | null) {
     if (!staffId) return null;
@@ -394,8 +431,10 @@ function POSPageInner() {
 
       if (existing) {
         const newQty = existing.qty + 1;
+        const previousQty = existing.qty;
         applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === existing.id ? { ...i, qty: newQty } : i)));
         await supabase.from("tab_items").update({ qty: newQty }).eq("id", existing.id);
+        pushUndo(tabId, `「${item.name}」を1点戻す`, () => setQty({ ...existing, qty: newQty }, previousQty));
       } else {
         const tempId = `temp-${Math.random().toString(36).slice(2)}`;
         const optimisticItem: TabItem = {
@@ -425,6 +464,7 @@ function POSPageInner() {
         if (data) {
           applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === tempId ? (data as TabItem) : i)));
         }
+        pushUndo(tabId, `「${item.name}」を取り消す`, () => deleteTabItem(optimisticItem));
       }
 
       // 飲み放題等のコースメニューなら、伝票にタイマーをセット（起点はタップ時点から）
@@ -448,22 +488,48 @@ function POSPageInner() {
 
   async function addManualItem() {
     if (!activeTab || !manualName.trim() || !manualPrice.trim()) return;
-    await supabase.from("tab_items").insert({
-      tab_id: activeTab.id,
-      name: manualName.trim(),
-      price: Number(manualPrice),
-      qty: 1,
-      source: "manual",
-    });
+    const tabId = activeTab.id;
+    const name = manualName.trim();
+    const price = Number(manualPrice);
+    const { data } = await supabase
+      .from("tab_items")
+      .insert({ tab_id: tabId, name, price, qty: 1, source: "manual" })
+      .select()
+      .single();
     setManualName("");
     setManualPrice("");
     loadData();
+    if (data) {
+      pushUndo(tabId, `「${name}」を取り消す`, () => deleteTabItem(data as TabItem));
+    }
   }
 
   async function setTabStaff(staffId: string | null) {
     if (!activeTab) return;
     await supabase.from("tabs").update({ staff_id: staffId }).eq("id", activeTab.id);
     loadData();
+  }
+
+  function reinsertTabItem(tabId: string, item: TabItem) {
+    enqueue(async () => {
+      const { data } = await supabase
+        .from("tab_items")
+        .insert({
+          tab_id: tabId,
+          staff_id: item.staff_id,
+          name: item.name,
+          price: item.price,
+          qty: item.qty,
+          source: item.source,
+          is_cast_drink: item.is_cast_drink,
+        })
+        .select()
+        .single();
+      if (data) {
+        applyLocalTabItems(tabId, (items) => [...items, data as TabItem]);
+      }
+      loadData();
+    });
   }
 
   function deleteTabItem(item: TabItem) {
@@ -476,6 +542,7 @@ function POSPageInner() {
       if (!current.id.startsWith("temp-")) {
         await supabase.from("tab_items").delete().eq("id", current.id);
       }
+      pushUndo(tabId, `「${current.name}」を元に戻す`, () => reinsertTabItem(tabId, current));
       loadData();
     });
   }
@@ -699,6 +766,33 @@ function POSPageInner() {
 
         {renderPaymentButtons(tab)}
       </div>
+    );
+  }
+
+  function renderMenuButton(m: MenuItem, opts: { big?: boolean; disabled: boolean }) {
+    const color = categoryColorFor(m.category);
+    return (
+      <button
+        key={m.id}
+        onClick={() => addMenuItem(m)}
+        disabled={opts.disabled}
+        style={{ borderLeftColor: color, borderLeftWidth: 4 }}
+        className={`group rounded-lg border border-line bg-elevated text-left disabled:opacity-40 active:bg-gold active:border-gold transition-colors ${
+          opts.big ? "p-4" : "p-3.5"
+        }`}
+      >
+        <div className={`font-bold group-active:text-bg ${opts.big ? "text-base" : "text-[15px]"}`}>
+          {m.is_quick_pick && "⭐ "}
+          {m.is_cast_drink && "🍾 "}
+          {m.name}
+          {m.course_minutes != null && (
+            <span className="text-xs font-normal opacity-70"> ・⏱{m.course_minutes}分</span>
+          )}
+        </div>
+        <div className={`text-gold font-mono group-active:text-bg ${opts.big ? "text-sm" : "text-xs"}`}>
+          ¥{m.price.toLocaleString()}
+        </div>
+      </button>
     );
   }
 
@@ -1002,28 +1096,40 @@ function POSPageInner() {
             </div>
           )}
 
+          {quickPickItems.length > 0 && (
+            <div>
+              <div className="text-gold font-bold text-sm mb-2">⭐ よく出る商品</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {quickPickItems.map((m) => renderMenuButton(m, { big: true, disabled: !!activeTab.closed_at }))}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="text-gold font-bold text-sm mb-2">メニュー</div>
-            <div className="grid grid-cols-2 gap-2">
-              {menu.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => addMenuItem(m)}
-                  disabled={!!activeTab.closed_at}
-                  className="group rounded-lg border border-line bg-elevated p-3 text-left disabled:opacity-40 active:bg-gold active:border-gold transition-colors"
-                >
-                  <div className="text-sm font-bold group-active:text-bg">
-                    {m.is_cast_drink && "🍾 "}
-                    {m.name}
-                    {m.course_minutes != null && (
-                      <span className="text-xs font-normal opacity-70"> ・⏱{m.course_minutes}分</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gold font-mono group-active:text-bg">
-                    ¥{m.price.toLocaleString()}
-                  </div>
-                </button>
-              ))}
+            {showCategoryTabs && (
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-0.5 px-0.5">
+                {menuCategories.map((cat) => {
+                  const color = categoryColorFor(cat === UNCATEGORIZED_LABEL ? null : cat);
+                  const active = cat === currentCategory;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      style={active ? { backgroundColor: `${color}26`, borderColor: color, color } : { borderColor: color }}
+                      className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-bold border-2 flex items-center gap-1.5 ${
+                        active ? "" : "text-gray-300"
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2.5">
+              {categoryMenuItems.map((m) => renderMenuButton(m, { disabled: !!activeTab.closed_at }))}
             </div>
           </div>
 
@@ -1096,10 +1202,10 @@ function POSPageInner() {
                     </div>
 
                     {!activeTab.closed_at ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => changeQty(i, -1)}
-                          className="w-8 h-8 rounded-lg border border-line text-gray-300 text-lg leading-none"
+                          className="w-10 h-10 rounded-lg border border-line text-gray-300 text-xl leading-none active:bg-line"
                         >
                           −
                         </button>
@@ -1111,11 +1217,11 @@ function POSPageInner() {
                             if (Number.isFinite(n)) setQty(i, Math.floor(n));
                           }}
                           inputMode="numeric"
-                          className="w-10 text-center font-mono bg-bg2 border border-line rounded-md py-1"
+                          className="w-11 text-center font-mono text-base bg-bg2 border border-line rounded-md py-1.5"
                         />
                         <button
                           onClick={() => changeQty(i, 1)}
-                          className="w-8 h-8 rounded-lg border border-line text-gray-300 text-lg leading-none"
+                          className="w-10 h-10 rounded-lg border border-line text-gray-300 text-xl leading-none active:bg-line"
                         >
                           ＋
                         </button>
@@ -1165,6 +1271,18 @@ function POSPageInner() {
       >
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </button>
+
+      {lastAction && lastAction.tabId === activeTabId && (
+        <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-sm">
+          <button
+            onClick={performUndo}
+            className="w-full rounded-xl bg-elevated border border-gold shadow-premium px-4 py-3 flex items-center justify-between gap-3"
+          >
+            <span className="text-sm text-gray-300 truncate">{lastAction.label}</span>
+            <span className="text-gold font-bold text-sm shrink-0">↺ 元に戻す</span>
+          </button>
+        </div>
+      )}
 
       {showEpaymentPicker && activeTab && (
         <div

@@ -16,7 +16,21 @@ export type MenuItem = {
   active: boolean;
   sort_order: number;
   is_cast_drink: boolean;
+  category: string | null;
+  is_quick_pick: boolean;
 };
+
+export const UNCATEGORIZED_LABEL = "その他";
+
+// カテゴリごとに見分けやすいよう、カテゴリ名から決定的に色を割り当てる（伝票色と同じ手法）
+const CATEGORY_COLOR_PALETTE = ["#DCA84E", "#6FB3E0", "#7FCB8F", "#E08A6F", "#B78FE0", "#E0C36F", "#6FCBC0", "#E06F9E"];
+
+export function categoryColorFor(category: string | null): string {
+  const key = category ?? UNCATEGORIZED_LABEL;
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return CATEGORY_COLOR_PALETTE[hash % CATEGORY_COLOR_PALETTE.length];
+}
 
 export type PaymentMethod = "cash" | "card" | "paypay" | "other_epayment";
 

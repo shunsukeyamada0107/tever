@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore, NameInputMode } from "@/lib/StoreContext";
-import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT } from "@/lib/types";
+import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT, UNCATEGORIZED_LABEL } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 import { StoreTheme } from "@/lib/theme";
 
@@ -46,10 +46,13 @@ export default function SettingsPage() {
   const [menuPrice, setMenuPrice] = useState("");
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
   const [menuIsCastDrink, setMenuIsCastDrink] = useState(false);
+  const [menuCategory, setMenuCategory] = useState("");
+  const [menuIsQuickPick, setMenuIsQuickPick] = useState(false);
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffWage, setNewStaffWage] = useState("");
   const [menuNameDrafts, setMenuNameDrafts] = useState<Record<string, string>>({});
+  const [menuCategoryDrafts, setMenuCategoryDrafts] = useState<Record<string, string>>({});
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const [storeNameDraft, setStoreNameDraft] = useState(storeName ?? "");
@@ -118,6 +121,7 @@ export default function SettingsPage() {
       .order("sort_order", { ascending: true });
     setMenu(menuData ?? []);
     setMenuNameDrafts(Object.fromEntries((menuData ?? []).map((m) => [m.id, m.name])));
+    setMenuCategoryDrafts(Object.fromEntries((menuData ?? []).map((m) => [m.id, m.category ?? ""])));
 
     const { data: staffData } = await supabase
       .from("staff")
@@ -145,11 +149,15 @@ export default function SettingsPage() {
       course_minutes: menuCourseMinutes.trim() === "" ? null : Number(menuCourseMinutes),
       sort_order: nextSortOrder,
       is_cast_drink: menuIsCastDrink,
+      category: menuCategory.trim() === "" ? null : menuCategory.trim(),
+      is_quick_pick: menuIsQuickPick,
     });
     setMenuName("");
     setMenuPrice("");
     setMenuCourseMinutes("");
     setMenuIsCastDrink(false);
+    setMenuCategory("");
+    setMenuIsQuickPick(false);
     loadData();
   }
 
@@ -158,15 +166,21 @@ export default function SettingsPage() {
     loadData();
   }
 
+  async function toggleQuickPick(m: MenuItem) {
+    await supabase.from("menu_items").update({ is_quick_pick: !m.is_quick_pick }).eq("id", m.id);
+    loadData();
+  }
+
   async function removeMenuItem(id: string) {
     await supabase.from("menu_items").update({ active: false }).eq("id", id);
     loadData();
   }
 
-  async function saveMenuName(id: string) {
+  async function saveMenuRow(id: string) {
     const name = (menuNameDrafts[id] ?? "").trim();
     if (!name) return;
-    await supabase.from("menu_items").update({ name }).eq("id", id);
+    const category = (menuCategoryDrafts[id] ?? "").trim();
+    await supabase.from("menu_items").update({ name, category: category === "" ? null : category }).eq("id", id);
     loadData();
   }
 
@@ -609,7 +623,7 @@ export default function SettingsPage() {
             <div className="text-sm text-gray-500 text-center py-6">メニューが未登録です</div>
           )}
           {menu.map((m, i) => (
-            <div key={m.id} className="flex justify-between items-center px-3 py-2 text-sm gap-2">
+            <div key={m.id} className="flex flex-wrap items-center px-3 py-2 text-sm gap-2">
               <div className="flex flex-col shrink-0">
                 <button
                   onClick={() => moveMenuItem(i, -1)}
@@ -631,12 +645,28 @@ export default function SettingsPage() {
               <input
                 value={menuNameDrafts[m.id] ?? m.name}
                 onChange={(e) => setMenuNameDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
-                className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1 text-sm text-gray-300"
+                className="flex-1 min-w-[6rem] rounded-md bg-bg2 border border-line px-2 py-1 text-sm text-gray-300"
+              />
+              <input
+                value={menuCategoryDrafts[m.id] ?? ""}
+                onChange={(e) => setMenuCategoryDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
+                placeholder="カテゴリ"
+                list="menu-category-options"
+                className="w-24 shrink-0 rounded-md bg-bg2 border border-line px-2 py-1 text-sm text-gray-300"
               />
               <span className="text-xs text-gray-500 shrink-0">
                 ¥{m.price.toLocaleString()}
                 {m.course_minutes != null && ` ・⏱${m.course_minutes}分`}
               </span>
+              <button
+                onClick={() => toggleQuickPick(m)}
+                title="よく出る商品（伝票画面の最上部に固定表示）"
+                className={`text-xs rounded-md border px-2 py-1 shrink-0 ${
+                  m.is_quick_pick ? "border-gold text-gold bg-gold/10" : "border-line text-gray-500"
+                }`}
+              >
+                ⭐
+              </button>
               <button
                 onClick={() => toggleCastDrink(m)}
                 title="キャストドリンク（ドリンクバック対象）"
@@ -647,8 +677,11 @@ export default function SettingsPage() {
                 🍾
               </button>
               <button
-                onClick={() => saveMenuName(m.id)}
-                disabled={(menuNameDrafts[m.id] ?? m.name) === m.name}
+                onClick={() => saveMenuRow(m.id)}
+                disabled={
+                  (menuNameDrafts[m.id] ?? m.name) === m.name &&
+                  (menuCategoryDrafts[m.id] ?? "") === (m.category ?? "")
+                }
                 className="text-xs rounded-md border border-line px-2 py-1 text-gray-300 disabled:opacity-40 shrink-0"
               >
                 保存
@@ -659,6 +692,11 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+        <datalist id="menu-category-options">
+          {Array.from(new Set(menu.map((m) => m.category).filter((c): c is string => !!c))).map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
         <div className="rounded-xl border border-dashed border-line p-3 space-y-2">
           <div className="flex gap-2">
             <input
@@ -674,6 +712,15 @@ export default function SettingsPage() {
               inputMode="numeric"
               className="w-20 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
             />
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={menuCategory}
+              onChange={(e) => setMenuCategory(e.target.value)}
+              placeholder={`カテゴリ（任意・例：ドリンク）`}
+              list="menu-category-options"
+              className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            />
             <input
               value={menuCourseMinutes}
               onChange={(e) => setMenuCourseMinutes(e.target.value)}
@@ -682,15 +729,25 @@ export default function SettingsPage() {
               className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
             />
           </div>
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-1.5 text-xs text-gray-400">
-              <input
-                type="checkbox"
-                checked={menuIsCastDrink}
-                onChange={(e) => setMenuIsCastDrink(e.target.checked)}
-              />
-              🍾 キャストドリンク（ドリンクバック対象）
-            </label>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={menuIsQuickPick}
+                  onChange={(e) => setMenuIsQuickPick(e.target.checked)}
+                />
+                ⭐ よく出る商品（最上部に固定表示）
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={menuIsCastDrink}
+                  onChange={(e) => setMenuIsCastDrink(e.target.checked)}
+                />
+                🍾 キャストドリンク（ドリンクバック対象）
+              </label>
+            </div>
             <button
               onClick={addMenuItem}
               className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
@@ -700,7 +757,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="text-xs text-gray-500 mt-1">
-          「コース分」は飲み放題など時間制メニュー用です。設定すると、伝票タブでこのメニューをタップした瞬間に伝票へタイマーがセットされます
+          カテゴリを入れると伝票画面でタブ分けされ、商品を探しやすくなります（空欄は「{UNCATEGORIZED_LABEL}」扱い）。「コース分」は飲み放題など時間制メニュー用です。設定すると、伝票タブでこのメニューをタップした瞬間に伝票へタイマーがセットされます
         </div>
       </div>
 

@@ -90,6 +90,8 @@ create table menu_items (
   active          boolean not null default true,
   sort_order      integer not null default 0,  -- メニュー管理画面での表示順（小さいほど上）
   is_cast_drink   boolean not null default false, -- ドリンクバック制の対象（お客様がキャストに奢るドリンク）
+  category        text,              -- 伝票画面でのカテゴリタブ分け。null=「その他」扱い
+  is_quick_pick   boolean not null default false, -- よく出る商品として伝票画面の最上部に固定表示
   created_at      timestamptz not null default now()
 );
 
