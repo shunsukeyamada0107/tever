@@ -659,7 +659,7 @@ function POSPageInner() {
                   style={{ borderLeftColor: tabColorFor(t.id), borderLeftWidth: 4 }}
                   className={`text-left rounded-xl px-3.5 py-3 border transition-colors ${
                     active
-                      ? "bg-gold/10 border-gold/50 text-gray-100"
+                      ? "bg-gold/10 border-gold/50 text-gray-200"
                       : "bg-elevated border-line text-gray-200"
                   }`}
                 >
@@ -1085,7 +1085,7 @@ function POSPageInner() {
               <button
                 key={m.method}
                 onClick={() => settleTab(m.method)}
-                className="w-full rounded-xl border border-line py-3.5 text-sm font-bold text-gray-100 flex items-center justify-center gap-2"
+                className="w-full rounded-xl border border-line py-3.5 text-sm font-bold text-gray-200 flex items-center justify-center gap-2"
               >
                 {paymentIcon(m.method)}
                 {m.label}で会計
@@ -1130,7 +1130,7 @@ function POSPageInner() {
             <div className="space-y-2.5">
               {activeTab.tab_items.map((i) => (
                 <div key={i.id} className="flex justify-between gap-3 text-[15px]">
-                  <span className="text-gray-100">
+                  <span className="text-gray-200">
                     {i.name}
                     {i.qty > 1 && <span className="text-gray-400"> × {i.qty}</span>}
                   </span>
@@ -1240,7 +1240,7 @@ function POSPageInner() {
                         key={c}
                         type="button"
                         onClick={() => setModalName((v) => v + c)}
-                        className="rounded-md bg-elevated border border-line py-1.5 text-sm font-bold text-gray-100"
+                        className="rounded-md bg-elevated border border-line py-1.5 text-sm font-bold text-gray-200"
                       >
                         {c}
                       </button>
