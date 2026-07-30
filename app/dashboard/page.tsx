@@ -464,7 +464,7 @@ function POSPageInner() {
         if (data) {
           applyLocalTabItems(tabId, (items) => items.map((i) => (i.id === tempId ? (data as TabItem) : i)));
         }
-        pushUndo(tabId, `「${item.name}」を取り消す`, () => deleteTabItem(optimisticItem));
+        pushUndo(tabId, `「${item.name}」を取り消す`, () => deleteTabItem(optimisticItem, { recordUndo: false }));
       }
 
       // 飲み放題等のコースメニューなら、伝票にタイマーをセット（起点はタップ時点から）
@@ -500,7 +500,7 @@ function POSPageInner() {
     setManualPrice("");
     loadData();
     if (data) {
-      pushUndo(tabId, `「${name}」を取り消す`, () => deleteTabItem(data as TabItem));
+      pushUndo(tabId, `「${name}」を取り消す`, () => deleteTabItem(data as TabItem, { recordUndo: false }));
     }
   }
 
@@ -532,9 +532,12 @@ function POSPageInner() {
     });
   }
 
-  function deleteTabItem(item: TabItem) {
+  // recordUndo=falseは「元に戻す」操作自体からの呼び出し用。取り消した直後にまた
+  // 「元に戻す」が出て連鎖してしまう（二重表示に見える）のを防ぐため、この場合は新しい取り消しを積まない
+  function deleteTabItem(item: TabItem, opts?: { recordUndo?: boolean }) {
     if (!activeTabId) return;
     const tabId = activeTabId;
+    const recordUndo = opts?.recordUndo ?? true;
     enqueue(async () => {
       const current = findLocalItem(tabId, item);
       if (!current) return;
@@ -542,7 +545,9 @@ function POSPageInner() {
       if (!current.id.startsWith("temp-")) {
         await supabase.from("tab_items").delete().eq("id", current.id);
       }
-      pushUndo(tabId, `「${current.name}」を元に戻す`, () => reinsertTabItem(tabId, current));
+      if (recordUndo) {
+        pushUndo(tabId, `「${current.name}」を元に戻す`, () => reinsertTabItem(tabId, current));
+      }
       loadData();
     });
   }
