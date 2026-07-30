@@ -23,6 +23,21 @@ import {
 
 const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
 
+// カタカナ専用のオンスクリーンキーボード（行→文字の2タップ）。OSの日本語入力（IME）を経由しないため、
+// 変換中の文字がonChangeで消されて入力できなくなる不具合を避けられる
+const KANA_GROUPS: { label: string; chars: string[] }[] = [
+  { label: "ア", chars: ["ア", "イ", "ウ", "エ", "オ", "ァ", "ィ", "ゥ", "ェ", "ォ", "ッ"] },
+  { label: "カ", chars: ["カ", "キ", "ク", "ケ", "コ", "ガ", "ギ", "グ", "ゲ", "ゴ"] },
+  { label: "サ", chars: ["サ", "シ", "ス", "セ", "ソ", "ザ", "ジ", "ズ", "ゼ", "ゾ"] },
+  { label: "タ", chars: ["タ", "チ", "ツ", "テ", "ト", "ダ", "ヂ", "ヅ", "デ", "ド"] },
+  { label: "ナ", chars: ["ナ", "ニ", "ヌ", "ネ", "ノ"] },
+  { label: "ハ", chars: ["ハ", "ヒ", "フ", "ヘ", "ホ", "バ", "ビ", "ブ", "ベ", "ボ", "パ", "ピ", "プ", "ペ", "ポ"] },
+  { label: "マ", chars: ["マ", "ミ", "ム", "メ", "モ"] },
+  { label: "ヤ", chars: ["ヤ", "ユ", "ヨ", "ャ", "ュ", "ョ"] },
+  { label: "ラ", chars: ["ラ", "リ", "ル", "レ", "ロ"] },
+  { label: "ワ", chars: ["ワ", "ヲ", "ン", "ー"] },
+];
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
@@ -64,8 +79,16 @@ export default function POSPage() {
 function POSPageInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
-  const { storeId, storeName, taxRate, acceptsCard, acceptsPaypay, acceptsOtherEpayment, enableNameSearch } =
-    useStore();
+  const {
+    storeId,
+    storeName,
+    taxRate,
+    acceptsCard,
+    acceptsPaypay,
+    acceptsOtherEpayment,
+    enableNameSearch,
+    nameInputMode,
+  } = useStore();
   const { date: businessDate } = useBusinessDate();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -73,6 +96,7 @@ function POSPageInner() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState("");
+  const [kanaGroupIndex, setKanaGroupIndex] = useState(0);
   const [nameSearchResults, setNameSearchResults] = useState<TabWithItems[]>([]);
   const [searchingName, setSearchingName] = useState(false);
   const [modalGuestCount, setModalGuestCount] = useState("");
@@ -239,6 +263,7 @@ function POSPageInner() {
     setModalName("");
     setModalGuestCount("");
     setModalStaffId(null);
+    setKanaGroupIndex(0);
     setShowCreateModal(true);
   }
 
@@ -1179,7 +1204,7 @@ function POSPageInner() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-4 space-y-4"
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-4 space-y-4 max-h-[85vh] overflow-y-auto"
           >
             <div className="text-gold font-bold text-base">伝票を作る</div>
 
@@ -1192,6 +1217,54 @@ function POSPageInner() {
                 placeholder="例：田中様・3卓"
                 className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
+
+              {nameInputMode === "kana_keypad" && (
+                <div className="mt-2 rounded-lg border border-line bg-bg2 p-2">
+                  <div className="grid grid-cols-5 gap-1 mb-1.5">
+                    {KANA_GROUPS.map((g, i) => (
+                      <button
+                        key={g.label}
+                        type="button"
+                        onClick={() => setKanaGroupIndex(i)}
+                        className={`rounded-md py-1.5 text-sm font-bold ${
+                          i === kanaGroupIndex ? "bg-gold text-bg" : "bg-elevated text-gray-300 border border-line"
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 mb-1.5">
+                    {KANA_GROUPS[kanaGroupIndex].chars.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setModalName((v) => v + c)}
+                        className="rounded-md bg-elevated border border-line py-1.5 text-sm font-bold text-gray-100"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setModalName((v) => v + " ")}
+                      className="rounded-md border border-line py-1.5 text-xs text-gray-300"
+                    >
+                      スペース
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalName((v) => v.slice(0, -1))}
+                      className="rounded-md border border-line py-1.5 text-xs text-gray-300"
+                    >
+                      ⌫ 削除
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {enableNameSearch && modalName.trim() &&
                 (searchingName ? (
                   <div className="text-xs text-gray-500 mt-1.5">検索中...</div>

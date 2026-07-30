@@ -36,6 +36,7 @@ create table stores (
   accepts_paypay            boolean not null default false, -- 電子決済としてPayPayを受け付けるか
   accepts_other_epayment    boolean not null default false, -- 電子決済としてその他（PayPay/カード以外）を受け付けるか
   enable_name_search        boolean not null default true,  -- 伝票を作る画面で、同じ名前の過去の伝票を検索表示するか
+  name_input_mode           text not null default 'keyboard' check (name_input_mode in ('keyboard','kana_keypad')), -- 伝票の名前欄の入力方法（keyboard=通常のキーボード、kana_keypad=カタカナ専用ボタン）
   organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
   created_at                timestamptz not null default now()
 );

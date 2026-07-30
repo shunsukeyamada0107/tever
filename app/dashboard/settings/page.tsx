@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
-import { useStore } from "@/lib/StoreContext";
+import { useStore, NameInputMode } from "@/lib/StoreContext";
 import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 import { StoreTheme } from "@/lib/theme";
@@ -37,6 +37,7 @@ export default function SettingsPage() {
     acceptsPaypay,
     acceptsOtherEpayment,
     enableNameSearch,
+    nameInputMode,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -63,6 +64,7 @@ export default function SettingsPage() {
   const [acceptsPaypayDraft, setAcceptsPaypayDraft] = useState(acceptsPaypay);
   const [acceptsOtherEpaymentDraft, setAcceptsOtherEpaymentDraft] = useState(acceptsOtherEpayment);
   const [enableNameSearchDraft, setEnableNameSearchDraft] = useState(enableNameSearch);
+  const [nameInputModeDraft, setNameInputModeDraft] = useState<NameInputMode>(nameInputMode);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -86,6 +88,7 @@ export default function SettingsPage() {
     setAcceptsPaypayDraft(acceptsPaypay);
     setAcceptsOtherEpaymentDraft(acceptsOtherEpayment);
     setEnableNameSearchDraft(enableNameSearch);
+    setNameInputModeDraft(nameInputMode);
   }, [
     storeName,
     taxRate,
@@ -102,6 +105,7 @@ export default function SettingsPage() {
     acceptsPaypay,
     acceptsOtherEpayment,
     enableNameSearch,
+    nameInputMode,
   ]);
 
   const loadData = useCallback(async () => {
@@ -230,6 +234,7 @@ export default function SettingsPage() {
         accepts_paypay: acceptsPaypayDraft,
         accepts_other_epayment: acceptsOtherEpaymentDraft,
         enable_name_search: enableNameSearchDraft,
+        name_input_mode: nameInputModeDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -488,6 +493,34 @@ export default function SettingsPage() {
               >
                 OFF
               </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">伝票の名前欄の入力方法</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setNameInputModeDraft("keyboard")}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  nameInputModeDraft === "keyboard" ? "border-gold text-gold bg-gold/10" : "border-line text-gray-400"
+                }`}
+              >
+                キーボード入力
+              </button>
+              <button
+                type="button"
+                onClick={() => setNameInputModeDraft("kana_keypad")}
+                className={`flex-1 rounded-md border px-3 py-1.5 text-sm ${
+                  nameInputModeDraft === "kana_keypad"
+                    ? "border-gold text-gold bg-gold/10"
+                    : "border-line text-gray-400"
+                }`}
+              >
+                カタカナボタン
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              「カタカナボタン」を選ぶと、キーボードの代わりに行→文字の2タップで打てるカタカナ専用ボタンが出ます。
             </div>
           </div>
           <div>

@@ -11,6 +11,8 @@ import {
 } from "@/lib/types";
 import { StoreTheme } from "@/lib/theme";
 
+export type NameInputMode = "keyboard" | "kana_keypad";
+
 type StoreContextValue = {
   storeId: string | null;
   storeName: string | null;
@@ -28,6 +30,7 @@ type StoreContextValue = {
   acceptsPaypay: boolean;
   acceptsOtherEpayment: boolean;
   enableNameSearch: boolean;
+  nameInputMode: NameInputMode;
   loading: boolean;
   reload: () => void;
 };
@@ -51,6 +54,7 @@ const StoreContext = createContext<StoreContextValue>({
   acceptsPaypay: false,
   acceptsOtherEpayment: false,
   enableNameSearch: true,
+  nameInputMode: "keyboard",
   loading: true,
   reload: () => {},
 });
@@ -73,6 +77,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [acceptsPaypay, setAcceptsPaypay] = useState(false);
   const [acceptsOtherEpayment, setAcceptsOtherEpayment] = useState(false);
   const [enableNameSearch, setEnableNameSearch] = useState(true);
+  const [nameInputMode, setNameInputMode] = useState<NameInputMode>("keyboard");
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -89,7 +94,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { data: member } = await supabase
         .from("store_members")
         .select(
-          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme, show_insights, accepts_card, accepts_paypay, accepts_other_epayment, enable_name_search)"
+          "store_id, stores(name, tax_rate, commission_rate, business_day_cutoff_hour, report_template, cash_float_amount, accent_color, commission_scheme, drink_back_amount, theme, show_insights, accepts_card, accepts_paypay, accepts_other_epayment, enable_name_search, name_input_mode)"
         )
         .eq("user_id", userData.user.id)
         .limit(1)
@@ -113,6 +118,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           accepts_paypay: boolean | null;
           accepts_other_epayment: boolean | null;
           enable_name_search: boolean | null;
+          name_input_mode: NameInputMode | null;
         };
         const stores = member.stores as unknown as StoreRow | StoreRow[] | null;
         const store = Array.isArray(stores) ? stores[0] : stores;
@@ -131,6 +137,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setAcceptsPaypay(store?.accepts_paypay ?? false);
         setAcceptsOtherEpayment(store?.accepts_other_epayment ?? false);
         setEnableNameSearch(store?.enable_name_search ?? true);
+        setNameInputMode(store?.name_input_mode ?? "keyboard");
       }
       setLoading(false);
     }
@@ -156,6 +163,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         acceptsPaypay,
         acceptsOtherEpayment,
         enableNameSearch,
+        nameInputMode,
         loading,
         reload,
       }}
