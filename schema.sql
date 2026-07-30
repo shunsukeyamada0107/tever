@@ -130,6 +130,20 @@ create table tab_items (
   created_at  timestamptz not null default now()
 );
 
+-- 伝票の作成・削除ログ（設定タブで確認用。特に削除は会計前後の伝票消しによる不正の見える化が目的なので、
+-- 削除時点の点数・金額をスナップショットとして残す）
+create table tab_logs (
+  id            uuid primary key default gen_random_uuid(),
+  store_id      uuid not null references stores(id) on delete cascade,
+  action        text not null check (action in ('created', 'deleted')),
+  tab_name      text not null,
+  business_date date not null,
+  guest_count   integer,
+  item_count    integer,   -- 削除時点の点数（作成時はnull）
+  total_amount  numeric,   -- 削除時点の合計金額（作成時はnull）
+  created_at    timestamptz not null default now()
+);
+
 -- ------------------------------------------------------------
 -- 7. 出退勤
 -- ------------------------------------------------------------
@@ -170,6 +184,7 @@ alter table staff         enable row level security;
 alter table menu_items    enable row level security;
 alter table tabs          enable row level security;
 alter table tab_items     enable row level security;
+alter table tab_logs      enable row level security;
 alter table attendance    enable row level security;
 alter table expenses      enable row level security;
 
@@ -242,6 +257,9 @@ create policy "org members can view their organization's tab items"
   on tab_items for select using (
     tab_id in (select id from tabs where store_id in (select my_org_store_ids()))
   );
+
+create policy "store members can access their tab logs"
+  on tab_logs for all using (store_id in (select my_store_ids()));
 
 create policy "store members can access their attendance"
   on attendance for all using (store_id in (select my_store_ids()));

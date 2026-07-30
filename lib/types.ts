@@ -78,6 +78,20 @@ export type TabItem = {
 
 export type TabWithItems = Tab & { tab_items: TabItem[] };
 
+export type TabLogAction = "created" | "deleted";
+
+export type TabLog = {
+  id: string;
+  store_id: string;
+  action: TabLogAction;
+  tab_name: string;
+  business_date: string;
+  guest_count: number | null;
+  item_count: number | null;
+  total_amount: number | null;
+  created_at: string;
+};
+
 export type Attendance = {
   id: string;
   store_id: string;

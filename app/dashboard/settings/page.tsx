@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore, NameInputMode } from "@/lib/StoreContext";
-import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT, UNCATEGORIZED_LABEL } from "@/lib/types";
+import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT, TabLog, UNCATEGORIZED_LABEL } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 import { StoreTheme } from "@/lib/theme";
 
@@ -42,6 +42,7 @@ export default function SettingsPage() {
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [tabLogs, setTabLogs] = useState<TabLog[]>([]);
   const [menuName, setMenuName] = useState("");
   const [menuPrice, setMenuPrice] = useState("");
   const [menuCourseMinutes, setMenuCourseMinutes] = useState("");
@@ -133,6 +134,14 @@ export default function SettingsPage() {
     setWageDrafts(
       Object.fromEntries((staffData ?? []).map((s) => [s.id, s.hourly_wage != null ? String(s.hourly_wage) : ""]))
     );
+
+    const { data: tabLogsData } = await supabase
+      .from("tab_logs")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setTabLogs((tabLogsData as TabLog[]) ?? []);
   }, [storeId]);
 
   useEffect(() => {
@@ -817,6 +826,49 @@ export default function SettingsPage() {
           >
             ＋ 追加
           </button>
+        </div>
+      </div>
+
+      <div>
+        <div className="text-gold font-bold text-sm mb-2">伝票ログ（作成・削除の履歴）</div>
+        {tabLogs.length === 0 ? (
+          <div className="rounded-xl border border-line bg-elevated text-sm text-gray-500 text-center py-6">
+            まだ記録がありません
+          </div>
+        ) : (
+          <div className="rounded-xl border border-line bg-elevated divide-y divide-line max-h-96 overflow-y-auto">
+            {tabLogs.map((log) => (
+              <div key={log.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={log.action === "deleted" ? "text-rose font-bold" : "text-good font-bold"}>
+                      {log.action === "deleted" ? "🗑削除" : "🆕作成"}
+                    </span>
+                    <span className="font-bold text-gray-200 truncate">{log.tab_name}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {log.business_date}（営業日）・
+                    {new Date(log.created_at).toLocaleString("ja-JP", {
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {log.guest_count != null && ` ・${log.guest_count}名`}
+                  </div>
+                </div>
+                {log.action === "deleted" && log.total_amount != null && (
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-bold text-rose">¥{log.total_amount.toLocaleString()}</div>
+                    {log.item_count != null && <div className="text-xs text-gray-500">{log.item_count}点</div>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="text-xs text-gray-500 mt-1">
+          削除は元に戻せないため、会計前後にかかわらず削除時点の点数・金額を記録しています（直近100件まで表示）
         </div>
       </div>
     </div>

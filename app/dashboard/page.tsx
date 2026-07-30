@@ -416,6 +416,13 @@ function POSPageInner() {
       setActiveTabId(data.id);
       setShowCreateModal(false);
       loadData();
+      await supabase.from("tab_logs").insert({
+        store_id: storeId,
+        action: "created",
+        tab_name: data.name,
+        business_date: businessDate,
+        guest_count: data.guest_count,
+      });
     }
   }
 
@@ -638,8 +645,18 @@ function POSPageInner() {
   }
 
   async function deleteTab() {
-    if (!activeTab) return;
+    if (!activeTab || !storeId) return;
     if (!confirm(`「${activeTab.name}」の伝票を削除しますか？（元に戻せません）`)) return;
+    // 会計前後にかかわらず、削除時点の点数・金額を記録しておく（不正な伝票消しの見える化のため）
+    await supabase.from("tab_logs").insert({
+      store_id: storeId,
+      action: "deleted",
+      tab_name: activeTab.name,
+      business_date: activeTab.business_date,
+      guest_count: activeTab.guest_count,
+      item_count: activeTab.tab_items.reduce((a, i) => a + i.qty, 0),
+      total_amount: tabTotal(activeTab.tab_items, taxRate, activeTab.discount_percent, activeTab.discount_amount),
+    });
     await supabase.from("tabs").delete().eq("id", activeTab.id);
     setActiveTabId(null);
     loadData();
