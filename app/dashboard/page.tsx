@@ -1217,6 +1217,7 @@ function POSPageInner() {
                         <input
                           key={`${i.id}-${i.qty}`}
                           defaultValue={i.qty}
+                          onFocus={(e) => e.target.select()}
                           onBlur={(e) => {
                             const n = Number(e.target.value);
                             if (Number.isFinite(n)) setQty(i, Math.floor(n));
