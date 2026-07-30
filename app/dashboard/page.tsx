@@ -23,20 +23,93 @@ import {
 
 const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
 
-// カタカナ専用のオンスクリーンキーボード（行→文字の2タップ）。OSの日本語入力（IME）を経由しないため、
-// 変換中の文字がonChangeで消されて入力できなくなる不具合を避けられる
-const KANA_GROUPS: { label: string; chars: string[] }[] = [
-  { label: "ア", chars: ["ア", "イ", "ウ", "エ", "オ", "ァ", "ィ", "ゥ", "ェ", "ォ", "ッ"] },
-  { label: "カ", chars: ["カ", "キ", "ク", "ケ", "コ", "ガ", "ギ", "グ", "ゲ", "ゴ"] },
-  { label: "サ", chars: ["サ", "シ", "ス", "セ", "ソ", "ザ", "ジ", "ズ", "ゼ", "ゾ"] },
-  { label: "タ", chars: ["タ", "チ", "ツ", "テ", "ト", "ダ", "ヂ", "ヅ", "デ", "ド"] },
-  { label: "ナ", chars: ["ナ", "ニ", "ヌ", "ネ", "ノ"] },
-  { label: "ハ", chars: ["ハ", "ヒ", "フ", "ヘ", "ホ", "バ", "ビ", "ブ", "ベ", "ボ", "パ", "ピ", "プ", "ペ", "ポ"] },
-  { label: "マ", chars: ["マ", "ミ", "ム", "メ", "モ"] },
-  { label: "ヤ", chars: ["ヤ", "ユ", "ヨ", "ャ", "ュ", "ョ"] },
-  { label: "ラ", chars: ["ラ", "リ", "ル", "レ", "ロ"] },
-  { label: "ワ", chars: ["ワ", "ヲ", "ン", "ー"] },
+// カタカナ専用のオンスクリーンキーボード。ひらがな50音表そのままの見た目で全部タップできるようにし、
+// 濁点・半濁点は入力後の文字に後付けする方式（か→が）。OSの日本語入力（IME）を経由しないため、
+// 変換中の文字がonChangeで消されて入力できなくなる不具合を避けられる。実際に入る文字はカタカナ。
+type KanaKey = { hira: string; kata: string } | null;
+const GOJUON_ROWS: KanaKey[][] = [
+  [
+    { hira: "あ", kata: "ア" },
+    { hira: "い", kata: "イ" },
+    { hira: "う", kata: "ウ" },
+    { hira: "え", kata: "エ" },
+    { hira: "お", kata: "オ" },
+  ],
+  [
+    { hira: "か", kata: "カ" },
+    { hira: "き", kata: "キ" },
+    { hira: "く", kata: "ク" },
+    { hira: "け", kata: "ケ" },
+    { hira: "こ", kata: "コ" },
+  ],
+  [
+    { hira: "さ", kata: "サ" },
+    { hira: "し", kata: "シ" },
+    { hira: "す", kata: "ス" },
+    { hira: "せ", kata: "セ" },
+    { hira: "そ", kata: "ソ" },
+  ],
+  [
+    { hira: "た", kata: "タ" },
+    { hira: "ち", kata: "チ" },
+    { hira: "つ", kata: "ツ" },
+    { hira: "て", kata: "テ" },
+    { hira: "と", kata: "ト" },
+  ],
+  [
+    { hira: "な", kata: "ナ" },
+    { hira: "に", kata: "ニ" },
+    { hira: "ぬ", kata: "ヌ" },
+    { hira: "ね", kata: "ネ" },
+    { hira: "の", kata: "ノ" },
+  ],
+  [
+    { hira: "は", kata: "ハ" },
+    { hira: "ひ", kata: "ヒ" },
+    { hira: "ふ", kata: "フ" },
+    { hira: "へ", kata: "ヘ" },
+    { hira: "ほ", kata: "ホ" },
+  ],
+  [
+    { hira: "ま", kata: "マ" },
+    { hira: "み", kata: "ミ" },
+    { hira: "む", kata: "ム" },
+    { hira: "め", kata: "メ" },
+    { hira: "も", kata: "モ" },
+  ],
+  [{ hira: "や", kata: "ヤ" }, null, { hira: "ゆ", kata: "ユ" }, null, { hira: "よ", kata: "ヨ" }],
+  [
+    { hira: "ら", kata: "ラ" },
+    { hira: "り", kata: "リ" },
+    { hira: "る", kata: "ル" },
+    { hira: "れ", kata: "レ" },
+    { hira: "ろ", kata: "ロ" },
+  ],
+  [{ hira: "わ", kata: "ワ" }, null, null, null, { hira: "を", kata: "ヲ" }],
+  [
+    { hira: "ん", kata: "ン" },
+    { hira: "っ", kata: "ッ" },
+    { hira: "ゃ", kata: "ャ" },
+    { hira: "ゅ", kata: "ュ" },
+    { hira: "ょ", kata: "ョ" },
+  ],
 ];
+
+// 濁点・半濁点の後付け用：まず「今の文字の素（清音）」を求めてから、清音⇄該当の点、でトグルする
+const BASE_OF: Record<string, string> = {
+  カ: "カ", ガ: "カ", キ: "キ", ギ: "キ", ク: "ク", グ: "ク", ケ: "ケ", ゲ: "ケ", コ: "コ", ゴ: "コ",
+  サ: "サ", ザ: "サ", シ: "シ", ジ: "シ", ス: "ス", ズ: "ス", セ: "セ", ゼ: "セ", ソ: "ソ", ゾ: "ソ",
+  タ: "タ", ダ: "タ", チ: "チ", ヂ: "チ", ツ: "ツ", ヅ: "ツ", テ: "テ", デ: "テ", ト: "ト", ド: "ト",
+  ハ: "ハ", バ: "ハ", パ: "ハ", ヒ: "ヒ", ビ: "ヒ", ピ: "ヒ", フ: "フ", ブ: "フ", プ: "フ",
+  ヘ: "ヘ", ベ: "ヘ", ペ: "ヘ", ホ: "ホ", ボ: "ホ", ポ: "ホ",
+};
+const DAKUTEN_OF: Record<string, string> = {
+  カ: "ガ", キ: "ギ", ク: "グ", ケ: "ゲ", コ: "ゴ",
+  サ: "ザ", シ: "ジ", ス: "ズ", セ: "ゼ", ソ: "ゾ",
+  タ: "ダ", チ: "ヂ", ツ: "ヅ", テ: "デ", ト: "ド",
+  ハ: "バ", ヒ: "ビ", フ: "ブ", ヘ: "ベ", ホ: "ボ",
+};
+const HANDAKUTEN_OF: Record<string, string> = { ハ: "パ", ヒ: "ピ", フ: "プ", ヘ: "ペ", ホ: "ポ" };
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
@@ -96,7 +169,6 @@ function POSPageInner() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState("");
-  const [kanaGroupIndex, setKanaGroupIndex] = useState(0);
   const [nameSearchResults, setNameSearchResults] = useState<TabWithItems[]>([]);
   const [searchingName, setSearchingName] = useState(false);
   const [modalGuestCount, setModalGuestCount] = useState("");
@@ -263,8 +335,31 @@ function POSPageInner() {
     setModalName("");
     setModalGuestCount("");
     setModalStaffId(null);
-    setKanaGroupIndex(0);
     setShowCreateModal(true);
+  }
+
+  function applyDakuten() {
+    setModalName((v) => {
+      if (!v) return v;
+      const last = v.slice(-1);
+      const base = BASE_OF[last];
+      if (!base) return v;
+      const dak = DAKUTEN_OF[base];
+      if (!dak) return v;
+      return v.slice(0, -1) + (last === dak ? base : dak);
+    });
+  }
+
+  function applyHandakuten() {
+    setModalName((v) => {
+      if (!v) return v;
+      const last = v.slice(-1);
+      const base = BASE_OF[last];
+      if (!base) return v;
+      const han = HANDAKUTEN_OF[base];
+      if (!han) return v;
+      return v.slice(0, -1) + (last === han ? base : han);
+    });
   }
 
   async function createTab() {
@@ -1220,33 +1315,46 @@ function POSPageInner() {
 
               {nameInputMode === "kana_keypad" && (
                 <div className="mt-2 rounded-lg border border-line bg-bg2 p-2">
-                  <div className="grid grid-cols-5 gap-1 mb-1.5">
-                    {KANA_GROUPS.map((g, i) => (
-                      <button
-                        key={g.label}
-                        type="button"
-                        onClick={() => setKanaGroupIndex(i)}
-                        className={`rounded-md py-1.5 text-sm font-bold ${
-                          i === kanaGroupIndex ? "bg-gold text-bg" : "bg-elevated text-gray-300 border border-line"
-                        }`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-5 gap-1 mb-1.5">
-                    {KANA_GROUPS[kanaGroupIndex].chars.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setModalName((v) => v + c)}
-                        className="rounded-md bg-elevated border border-line py-1.5 text-sm font-bold text-gray-200"
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-1">
+                  {GOJUON_ROWS.map((row, ri) => (
+                    <div key={ri} className="grid grid-cols-5 gap-1 mb-1.5">
+                      {row.map((key, ci) =>
+                        key ? (
+                          <button
+                            key={key.hira}
+                            type="button"
+                            onClick={() => setModalName((v) => v + key.kata)}
+                            className="rounded-md bg-elevated border border-line py-1.5 text-sm font-bold text-gray-200"
+                          >
+                            {key.hira}
+                          </button>
+                        ) : (
+                          <div key={ci} />
+                        )
+                      )}
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-5 gap-1">
+                    <button
+                      type="button"
+                      onClick={applyDakuten}
+                      className="rounded-md border border-line py-1.5 text-sm font-bold text-gray-200"
+                    >
+                      ゛
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyHandakuten}
+                      className="rounded-md border border-line py-1.5 text-sm font-bold text-gray-200"
+                    >
+                      ゜
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalName((v) => v + "ー")}
+                      className="rounded-md border border-line py-1.5 text-sm font-bold text-gray-200"
+                    >
+                      ー
+                    </button>
                     <button
                       type="button"
                       onClick={() => setModalName((v) => v + " ")}
@@ -1259,7 +1367,7 @@ function POSPageInner() {
                       onClick={() => setModalName((v) => v.slice(0, -1))}
                       className="rounded-md border border-line py-1.5 text-xs text-gray-300"
                     >
-                      ⌫ 削除
+                      ⌫削除
                     </button>
                   </div>
                 </div>
