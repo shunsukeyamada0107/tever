@@ -195,6 +195,34 @@ describe("staffCommissionBreakdown — simple scheme", () => {
     expect(result[0].commission).toBeCloseTo(660, 5); // 3300 * 0.2
   });
 
+  it("gives the sole assignee the tab's actual rounded checkout total, round-up included", () => {
+    const t = tab({
+      staff_id: "a",
+      tab_items: [item({ price: 910, qty: 1 })], // 910 -> tax 91 -> 1001（レジ会計では1100円に切り上げ）
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple");
+    // 1人で丸ごと担当しているので、実際にレジを通った1100円がそのまま歩合の元になる
+    expect(result[0].salesWithTax).toBeCloseTo(1100, 5);
+    expect(result[0].commission).toBeCloseTo(220, 5);
+  });
+
+  it("does not hand the tab's round-up bonus to just one person when it's shared", () => {
+    const t = tab({
+      staff_id: null,
+      tab_items: [
+        item({ price: 455, qty: 1, staff_id: "a" }),
+        item({ price: 455, qty: 1, staff_id: "b" }), // 910 -> tax 91 -> 1001（会計は1100円に切り上げ）
+      ],
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple");
+    const a = result.find((r) => r.staffId === "a")!;
+    const b = result.find((r) => r.staffId === "b")!;
+    // 半々で担当。切り上げ後の1100円を折半すると550円ずつになってしまうが、
+    // 切り上げ前の1001円を折半した500.5円ずつが正しい（切り上げ分は誰か1人だけの取り分にはしない）
+    expect(a.salesWithTax).toBeCloseTo(500.5, 5);
+    expect(b.salesWithTax).toBeCloseTo(500.5, 5);
+  });
+
   it("lets a per-item staff override split commission between two staff", () => {
     const t = tab({
       staff_id: "a",

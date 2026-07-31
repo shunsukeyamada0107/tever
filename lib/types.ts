@@ -254,11 +254,18 @@ export type StaffCommission = {
   commission: number;
 };
 
-// 歩合給: 会計済み（closed_atがある）伝票の実際の会計額（100円切り上げ後の合計）を、
-// 品目ごとの担当（tab_items.staff_id で個別指定があればそれ、無ければ伝票の担当 tabs.staff_id）で按分する。
+// 歩合給: 会計済み（closed_atがある）伝票の売上を、品目ごとの担当（tab_items.staff_id で個別指定があればそれ、
+// 無ければ伝票の担当 tabs.staff_id）で按分する。
 // 例: 伝票の担当はAさんだが、シャンパンだけBさんに個別指定した場合、シャンパン分だけBさんの歩合になる。
 //
-// scheme="simple"（既定）: 按分した売上（税込・実会計額ベース）にcommissionRateを掛けるだけ。
+// 按分の元にする金額は2パターンある:
+// ・伝票を1人で丸ごと担当している場合（按分比率100%）: 実際にレジを通った金額（100円切り上げ後の会計額）そのもの。
+//   全額その人が集めたお金なので、切り上げ分も含めて実際に入った額を歩合の元にする。
+// ・複数人で分け合っている場合: 切り上げ前の金額（税込・割引後）を按分比率で分けた額。
+//   伝票全体を切り上げてから複数人に配ると、切り上げで増えた数十円が誰か1人だけに偏って乗ってしまうため、
+//   切り上げる前の金額を使うことで全員が公平に自分の商品分だけを受け取れるようにしている。
+//
+// scheme="simple"（既定）: 按分した売上にcommissionRateを掛けるだけ。
 // scheme="drink_back": 按分した売上のうち、is_cast_drinkな品目分を除いた額にcommissionRateを掛けたもの（売上バック）に、
 //   is_cast_drink品目の数量×drinkBackAmount（ドリンクバック）を足す。
 export function staffCommissionBreakdown(
@@ -276,7 +283,10 @@ export function staffCommissionBreakdown(
     const sub = tabSubtotal(t.tab_items);
     if (sub <= 0) return;
 
-    const actualTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+    const adjustedTotal =
+      tabPreDiscountTotal(t.tab_items, taxRate) -
+      tabDiscountAmount(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+    const roundedTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
 
     // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定・歩合対象外は集計しない）
     const byStaff: Record<string, number> = {};
@@ -294,7 +304,9 @@ export function staffCommissionBreakdown(
 
     Object.entries(byStaff).forEach(([key, rawSub]) => {
       const shareRatio = rawSub / sub;
-      const salesWithTax = actualTotal * shareRatio;
+      // 1人で丸ごと担当（比率100%）なら実際の会計額を、複数人で分け合うなら切り上げ前の金額を按分する
+      const basis = shareRatio === 1 ? roundedTotal : adjustedTotal;
+      const salesWithTax = basis * shareRatio;
 
       if (!map[key]) {
         map[key] = {
@@ -314,7 +326,7 @@ export function staffCommissionBreakdown(
       if (scheme === "drink_back") {
         const drinkQty = byStaffDrinkQty[key] ?? 0;
         const drinkShareRatio = (byStaffDrink[key] ?? 0) / sub;
-        const drinkSalesWithTax = actualTotal * drinkShareRatio;
+        const drinkSalesWithTax = basis * drinkShareRatio;
         const salesBack = Math.max(0, salesWithTax - drinkSalesWithTax) * commissionRate;
         const drinkBack = drinkQty * drinkBackAmount;
         map[key].drinkCount += drinkQty;
