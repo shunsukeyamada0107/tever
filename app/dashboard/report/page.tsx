@@ -16,6 +16,7 @@ import {
   StaffCommission,
   PAYMENT_METHOD_EMOJI,
   PAYMENT_METHOD_LABELS,
+  itemSubtotal,
   tabSubtotal,
   tabTax,
   tabTotal,
@@ -272,6 +273,20 @@ export default function ReportPage() {
     if (!staffId) return "未設定";
     const s = staff.find((x) => x.id === staffId);
     return s ? s.name : "(元スタッフ)";
+  }
+
+  // 伝票内の品目を実担当（個別指定があればそれ、無ければ伝票の担当）ごとに集計する。
+  // 伝票の👤表示だけでは品目レベルの個別指定が見えず、歩合の数字と食い違って見える原因になるため、
+  // 複数人にまたがる伝票はここで内訳を出せるようにする
+  function tabStaffBreakdown(t: TabWithItems) {
+    const byStaff = new Map<string | null, number>();
+    t.tab_items.forEach((i) => {
+      const effectiveStaffId = i.staff_id ?? t.staff_id;
+      byStaff.set(effectiveStaffId, (byStaff.get(effectiveStaffId) ?? 0) + itemSubtotal(i));
+    });
+    return Array.from(byStaff.entries())
+      .map(([staffId, amount]) => ({ staffId, name: staffName(staffId), amount }))
+      .sort((a, b) => b.amount - a.amount);
   }
 
   function isEligible(staffId: string) {
@@ -769,19 +784,35 @@ export default function ReportPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-            {tabRows.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => router.push(`/dashboard?tab=${t.id}`)}
-                className="w-full flex justify-between items-center px-3 py-2 text-sm text-left active:bg-bg2"
-              >
-                <span className="text-gray-300">
-                  {t.closed_at ? (t.payment_method ? PAYMENT_METHOD_EMOJI[t.payment_method] : "💴") : "🕐"} {t.name}
-                  <span className="text-xs text-gray-500"> ・👤{staffName(t.staff_id)}</span>
-                </span>
-                <span className="font-mono text-gray-400">{yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}</span>
-              </button>
-            ))}
+            {tabRows.map((t) => {
+              const breakdown = tabStaffBreakdown(t);
+              const mixed = breakdown.length > 1;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => router.push(`/dashboard?tab=${t.id}`)}
+                  className="w-full flex flex-col gap-0.5 px-3 py-2 text-sm text-left active:bg-bg2"
+                >
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-300 truncate">
+                      {t.closed_at ? (t.payment_method ? PAYMENT_METHOD_EMOJI[t.payment_method] : "💴") : "🕐"} {t.name}
+                      <span className="text-xs text-gray-500">
+                        {" "}
+                        ・👤{mixed ? `複数（${breakdown.length}名）` : staffName(breakdown[0]?.staffId ?? t.staff_id)}
+                      </span>
+                    </span>
+                    <span className="font-mono text-gray-400 shrink-0">
+                      {yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}
+                    </span>
+                  </div>
+                  {mixed && (
+                    <div className="text-[11px] text-gray-500 pl-5">
+                      内訳: {breakdown.map((b) => `${b.name} ${yen(b.amount)}`).join(" ・ ")}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
