@@ -634,26 +634,31 @@ export default function ReportPage() {
       });
       [2, 3, 4].forEach((c) => (totalRow.getCell(c).numFmt = '"¥"#,##0'));
 
-      // --- 人件費（人別・今月）：日ごとの表とは別枠で ---
-      monthSheet.addRow([]);
-      const laborTitleRow = monthSheet.addRow(["人件費（人別・今月）"]);
-      laborTitleRow.font = { bold: true, size: 12, color: { argb: GOLD } };
-      styleHeaderRow(monthSheet.addRow(["スタッフ", "勤務時間", "時給人件費", "歩合給", "合計"]));
+      // --- 人件費（人別・今月）：月次シートとは別のシートに独立させる ---
+      const monthLaborSheet = wb.addWorksheet(`人件費(${monthLabel})`);
+      monthLaborSheet.columns = [
+        { header: "スタッフ", key: "name", width: 14 },
+        { header: "勤務時間", key: "hours", width: 12 },
+        { header: "時給人件費", key: "hourlyCost", width: 14 },
+        { header: "歩合給", key: "commission", width: 14 },
+        { header: "合計", key: "total", width: 14 },
+      ];
+      styleHeaderRow(monthLaborSheet.getRow(1));
       monthLaborRows.forEach((r, i) => {
-        const row = monthSheet.addRow([
-          r.name,
-          r.hours != null ? Number(r.hours.toFixed(1)) : "",
-          r.hourlyCost != null ? Math.round(r.hourlyCost) : "",
-          r.commission != null ? Math.round(r.commission) : "",
-          Math.round(r.total),
-        ]);
-        [3, 4, 5].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
-        row.getCell(5).font = { bold: true, color: { argb: GOLD } };
+        const row = monthLaborSheet.addRow({
+          name: r.name,
+          hours: r.hours != null ? Number(r.hours.toFixed(1)) : "",
+          hourlyCost: r.hourlyCost != null ? Math.round(r.hourlyCost) : "",
+          commission: r.commission != null ? Math.round(r.commission) : "",
+          total: Math.round(r.total),
+        });
+        ["hourlyCost", "commission", "total"].forEach((k) => (row.getCell(k).numFmt = '"¥"#,##0'));
+        row.getCell("total").font = { bold: true, color: { argb: GOLD } };
         styleDataRow(row, i % 2 === 1);
       });
-      const laborTotalRow = monthSheet.addRow(["合計", "", "", "", Math.round(monthTotal.labor)]);
+      const laborTotalRow = monthLaborSheet.addRow({ name: "合計", total: Math.round(monthTotal.labor) });
       laborTotalRow.font = { bold: true };
-      laborTotalRow.getCell(5).numFmt = '"¥"#,##0';
+      laborTotalRow.getCell("total").numFmt = '"¥"#,##0';
       laborTotalRow.eachCell((cell) => {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GOLD } };
         cell.font = { bold: true, color: { argb: DARK } };
