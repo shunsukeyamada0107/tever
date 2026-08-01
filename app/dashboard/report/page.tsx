@@ -601,33 +601,29 @@ export default function ReportPage() {
         { width: 13 },
         { width: 13 },
         { width: 13 },
-        { width: 13 },
         { width: 10 },
         { width: 10 },
       ];
       const titleRow2 = monthSheet.addRow(["月", storeName ?? ""]);
       titleRow2.font = { bold: true, size: 13, color: { argb: GOLD } };
-      styleHeaderRow(monthSheet.addRow(["日", "売上高", "経費", "人件費", "粗利益", "組数", "人数"]));
+      styleHeaderRow(monthSheet.addRow(["日", "売上高", "原価", "粗利益", "組数", "人数"]));
 
       for (let day = 1; day <= daysInMonth; day++) {
         const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
         const r = rowByDate.get(date);
         const sales = r ? Math.round(r.subtotal) : 0;
         const cost = r ? Math.round(r.expense) : 0;
-        const labor = r ? Math.round(r.labor) : 0;
-        const row = monthSheet.addRow([day, sales, cost, labor, sales - cost - labor, r?.tabCount ?? 0, r?.guestCount ?? 0]);
-        [2, 3, 4, 5].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
+        const row = monthSheet.addRow([day, sales, cost, sales - cost, r?.tabCount ?? 0, r?.guestCount ?? 0]);
+        [2, 3, 4].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
         styleDataRow(row, day % 2 === 0);
       }
       const ledgerTotalSales = Math.round(monthTotal.subtotal);
       const ledgerTotalCost = Math.round(monthTotal.expense);
-      const ledgerTotalLabor = Math.round(monthTotal.labor);
       const totalRow = monthSheet.addRow([
         "合計",
         ledgerTotalSales,
         ledgerTotalCost,
-        ledgerTotalLabor,
-        ledgerTotalSales - ledgerTotalCost - ledgerTotalLabor,
+        ledgerTotalSales - ledgerTotalCost,
         monthTotal.tabCount,
         monthTotal.guestCount,
       ]);
@@ -636,7 +632,32 @@ export default function ReportPage() {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GOLD } };
         cell.font = { bold: true, color: { argb: DARK } };
       });
-      [2, 3, 4, 5].forEach((c) => (totalRow.getCell(c).numFmt = '"¥"#,##0'));
+      [2, 3, 4].forEach((c) => (totalRow.getCell(c).numFmt = '"¥"#,##0'));
+
+      // --- 人件費（人別・今月）：日ごとの表とは別枠で ---
+      monthSheet.addRow([]);
+      const laborTitleRow = monthSheet.addRow(["人件費（人別・今月）"]);
+      laborTitleRow.font = { bold: true, size: 12, color: { argb: GOLD } };
+      styleHeaderRow(monthSheet.addRow(["スタッフ", "勤務時間", "時給人件費", "歩合給", "合計"]));
+      monthLaborRows.forEach((r, i) => {
+        const row = monthSheet.addRow([
+          r.name,
+          r.hours != null ? Number(r.hours.toFixed(1)) : "",
+          r.hourlyCost != null ? Math.round(r.hourlyCost) : "",
+          r.commission != null ? Math.round(r.commission) : "",
+          Math.round(r.total),
+        ]);
+        [3, 4, 5].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
+        row.getCell(5).font = { bold: true, color: { argb: GOLD } };
+        styleDataRow(row, i % 2 === 1);
+      });
+      const laborTotalRow = monthSheet.addRow(["合計", "", "", "", Math.round(monthTotal.labor)]);
+      laborTotalRow.font = { bold: true };
+      laborTotalRow.getCell(5).numFmt = '"¥"#,##0';
+      laborTotalRow.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GOLD } };
+        cell.font = { bold: true, color: { argb: DARK } };
+      });
 
       if (prevMonthSummary) {
         monthSheet.addRow([]);
