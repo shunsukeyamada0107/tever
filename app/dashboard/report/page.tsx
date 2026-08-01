@@ -606,18 +606,18 @@ export default function ReportPage() {
       ];
       const titleRow2 = monthSheet.addRow(["月", storeName ?? ""]);
       titleRow2.font = { bold: true, size: 13, color: { argb: GOLD } };
-      styleHeaderRow(monthSheet.addRow(["日", "売上高", "原価", "粗利益", "組数", "人数"]));
+      styleHeaderRow(monthSheet.addRow(["日", "売上高(税込)", "原価", "粗利益", "組数", "人数"]));
 
       for (let day = 1; day <= daysInMonth; day++) {
         const date = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
         const r = rowByDate.get(date);
-        const sales = r ? Math.round(r.subtotal) : 0;
+        const sales = r ? Math.round(r.total) : 0;
         const cost = r ? Math.round(r.expense) : 0;
         const row = monthSheet.addRow([day, sales, cost, sales - cost, r?.tabCount ?? 0, r?.guestCount ?? 0]);
         [2, 3, 4].forEach((c) => (row.getCell(c).numFmt = '"¥"#,##0'));
         styleDataRow(row, day % 2 === 0);
       }
-      const ledgerTotalSales = Math.round(monthTotal.subtotal);
+      const ledgerTotalSales = Math.round(monthTotal.total);
       const ledgerTotalCost = Math.round(monthTotal.expense);
       const totalRow = monthSheet.addRow([
         "合計",
