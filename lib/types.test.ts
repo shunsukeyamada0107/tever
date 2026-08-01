@@ -223,6 +223,23 @@ describe("staffCommissionBreakdown — simple scheme", () => {
     expect(b.salesWithTax).toBeCloseTo(500.5, 5);
   });
 
+  it("gives the tab's round-up remainder to its default staff, not to whoever got an item override", () => {
+    const t = tab({
+      staff_id: "a", // 伝票そのものの担当（デフォルト）
+      tab_items: [
+        item({ price: 8800, qty: 1 }), // 個別指定なし -> デフォルト担当(a)のまま
+        item({ price: 20000, qty: 1, staff_id: "b" }), // bに個別指定
+      ], // 小計28800 -> 税込31680（会計は31700に切り上げ）
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple");
+    const a = result.find((r) => r.staffId === "a")!;
+    const b = result.find((r) => r.staffId === "b")!;
+    // a: 31680の11/36(=9680) + 切り上げ差額20 = 9700 / b: 31680の25/36(=22000)そのまま
+    expect(a.salesWithTax).toBeCloseTo(9700, 5);
+    expect(b.salesWithTax).toBeCloseTo(22000, 5);
+    expect(a.salesWithTax + b.salesWithTax).toBeCloseTo(31700, 5); // 合計は実際の会計額と一致する
+  });
+
   it("lets a per-item staff override split commission between two staff", () => {
     const t = tab({
       staff_id: "a",
