@@ -3,7 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore, NameInputMode } from "@/lib/StoreContext";
-import { MenuItem, Staff, CommissionScheme, DEFAULT_DRINK_BACK_AMOUNT, TabLog, UNCATEGORIZED_LABEL } from "@/lib/types";
+import {
+  MenuItem,
+  Staff,
+  CommissionScheme,
+  DEFAULT_DRINK_BACK_AMOUNT,
+  StaffCommission,
+  TabLog,
+  TabWithItems,
+  UNCATEGORIZED_LABEL,
+  staffCommissionBreakdown,
+} from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
 import { StoreTheme } from "@/lib/theme";
 
@@ -67,6 +77,8 @@ export default function SettingsPage() {
   const [pinError, setPinError] = useState("");
   const [savingPin, setSavingPin] = useState(false);
   const [salaryDrafts, setSalaryDrafts] = useState<Record<string, { base: string; allowance: string }>>({});
+  const [monthCommission, setMonthCommission] = useState<StaffCommission[]>([]);
+  const [monthCommissionLoaded, setMonthCommissionLoaded] = useState(false);
 
   const [storeNameDraft, setStoreNameDraft] = useState(storeName ?? "");
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
@@ -258,10 +270,43 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadMonthCommission() {
+    if (!storeId) return;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const start = `${y}-${pad(m + 1)}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
+
+    const { data } = await supabase
+      .from("tabs")
+      .select("*, tab_items(*)")
+      .eq("store_id", storeId)
+      .gte("business_date", start)
+      .lte("business_date", end)
+      .not("closed_at", "is", null);
+
+    const isEligible = (staffId: string) => staff.find((x) => x.id === staffId)?.commission_eligible ?? true;
+    const breakdown = staffCommissionBreakdown(
+      (data as TabWithItems[]) ?? [],
+      (id) => staff.find((x) => x.id === id)?.name ?? "(元スタッフ)",
+      taxRate,
+      commissionRate,
+      commissionScheme,
+      drinkBackAmount,
+      isEligible
+    );
+    setMonthCommission(breakdown);
+    setMonthCommissionLoaded(true);
+  }
+
   function submitPin() {
     if (pinInput.trim() !== "" && pinInput === ownerPin) {
       setOwnerUnlocked(true);
       setShowOwnerLock(false);
+      loadMonthCommission();
     } else {
       setPinError("暗証番号が違います");
       setPinInput("");
@@ -281,6 +326,7 @@ export default function SettingsPage() {
     setPinError("");
     setOwnerUnlocked(true);
     setShowOwnerLock(false);
+    loadMonthCommission();
   }
 
   async function changePin() {
@@ -967,7 +1013,7 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <div className="flex justify-between items-center gap-2">
               <div className="text-xs text-gray-500">
-                各スタッフの基本給・特別手当（参照情報のみ。歩合・時給の自動計算には含まれません）
+                各スタッフの基本給・特別手当（入力欄は参照情報のみで、歩合・時給の自動計算には含まれません。下の合計にはその場で今月の歩合を足しています）
               </div>
               <button
                 onClick={() => setOwnerUnlocked(false)}
@@ -981,46 +1027,76 @@ export default function SettingsPage() {
                 スタッフが未登録です
               </div>
             ) : (
-              <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-                {staff.map((s) => {
-                  const draft = salaryDrafts[s.id] ?? { base: "", allowance: "" };
-                  const dirty =
-                    draft.base !== (s.base_salary != null ? String(s.base_salary) : "") ||
-                    draft.allowance !== (s.special_allowance != null ? String(s.special_allowance) : "");
-                  return (
-                    <div key={s.id} className="px-3 py-2.5 space-y-1.5">
-                      <div className="text-sm font-bold text-gray-200">{s.name}</div>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          value={draft.base}
-                          onChange={(e) =>
-                            setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, base: e.target.value } }))
-                          }
-                          placeholder="基本給(任意)"
-                          inputMode="numeric"
-                          className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-                        />
-                        <input
-                          value={draft.allowance}
-                          onChange={(e) =>
-                            setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, allowance: e.target.value } }))
-                          }
-                          placeholder="特別手当(任意)"
-                          inputMode="numeric"
-                          className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-                        />
-                        <button
-                          onClick={() => saveSalary(s.id)}
-                          disabled={!dirty}
-                          className="text-xs rounded-md border border-line px-2 py-1.5 text-gray-300 disabled:opacity-40 shrink-0"
-                        >
-                          保存
-                        </button>
+              <>
+                <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+                  {staff.map((s) => {
+                    const draft = salaryDrafts[s.id] ?? { base: "", allowance: "" };
+                    const dirty =
+                      draft.base !== (s.base_salary != null ? String(s.base_salary) : "") ||
+                      draft.allowance !== (s.special_allowance != null ? String(s.special_allowance) : "");
+                    const commission = monthCommission.find((c) => c.staffId === s.id)?.commission ?? 0;
+                    const total = (s.base_salary ?? 0) + (s.special_allowance ?? 0) + commission;
+                    return (
+                      <div key={s.id} className="px-3 py-2.5 space-y-1.5">
+                        <div className="text-sm font-bold text-gray-200">{s.name}</div>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            value={draft.base}
+                            onChange={(e) =>
+                              setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, base: e.target.value } }))
+                            }
+                            placeholder="基本給(任意)"
+                            inputMode="numeric"
+                            className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                          />
+                          <input
+                            value={draft.allowance}
+                            onChange={(e) =>
+                              setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, allowance: e.target.value } }))
+                            }
+                            placeholder="特別手当(任意)"
+                            inputMode="numeric"
+                            className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                          />
+                          <button
+                            onClick={() => saveSalary(s.id)}
+                            disabled={!dirty}
+                            className="text-xs rounded-md border border-line px-2 py-1.5 text-gray-300 disabled:opacity-40 shrink-0"
+                          >
+                            保存
+                          </button>
+                        </div>
+                        {!monthCommissionLoaded ? (
+                          <div className="text-xs text-gray-500">今月の歩合を読み込み中...</div>
+                        ) : (
+                          <div className="text-xs text-gray-400 font-mono">
+                            今月の歩合 ¥{Math.round(commission).toLocaleString()} ・ 人件費合計{" "}
+                            <span className="text-gold font-bold">¥{Math.round(total).toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                {monthCommissionLoaded && (
+                  <div className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2.5 flex justify-between items-center">
+                    <span className="text-sm font-bold text-gray-200">人件費 合計（今月・全スタッフ）</span>
+                    <span className="font-mono font-bold text-gold text-base">
+                      ¥
+                      {Math.round(
+                        staff.reduce(
+                          (a, s) =>
+                            a +
+                            (s.base_salary ?? 0) +
+                            (s.special_allowance ?? 0) +
+                            (monthCommission.find((c) => c.staffId === s.id)?.commission ?? 0),
+                          0
+                        )
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
             <button
               onClick={() => {
