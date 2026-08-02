@@ -1118,70 +1118,6 @@ function POSPageInner() {
             </div>
           )}
 
-          {quickPickItems.length > 0 && (
-            <div>
-              <div className="text-gold font-bold text-sm mb-2">⭐ よく出る商品</div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {quickPickItems.map((m) => renderMenuButton(m, { big: true, disabled: !!activeTab.closed_at }))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="text-gold font-bold text-sm mb-2">メニュー</div>
-            {showCategoryTabs && (
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-0.5 px-0.5">
-                {menuCategories.map((cat) => {
-                  const color = categoryColorFor(cat === UNCATEGORIZED_LABEL ? null : cat);
-                  const active = cat === currentCategory;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setActiveCategory(cat)}
-                      style={active ? { backgroundColor: `${color}26`, borderColor: color, color } : { borderColor: color }}
-                      className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-bold border-2 flex items-center gap-1.5 ${
-                        active ? "" : "text-gray-300"
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2.5">
-              {categoryMenuItems.map((m) => renderMenuButton(m, { disabled: !!activeTab.closed_at }))}
-            </div>
-          </div>
-
-          {!activeTab.closed_at && (
-            <div>
-              <div className="text-gold font-bold text-sm mb-2">自由入力で追加</div>
-              <div className="flex gap-2">
-                <input
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                  placeholder="品名"
-                  className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-                />
-                <input
-                  value={manualPrice}
-                  onChange={(e) => setManualPrice(e.target.value)}
-                  placeholder="金額"
-                  inputMode="numeric"
-                  className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
-                />
-                <button
-                  onClick={addManualItem}
-                  className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
-                >
-                  ＋ 追加
-                </button>
-              </div>
-            </div>
-          )}
-
           <div>
             <div className="text-gold font-bold text-sm mb-2">
               伝票内容（{activeTab.tab_items.reduce((a, i) => a + i.qty, 0)}点）
@@ -1270,6 +1206,70 @@ function POSPageInner() {
               </div>
             )}
           </div>
+
+          {quickPickItems.length > 0 && (
+            <div>
+              <div className="text-gold font-bold text-sm mb-2">⭐ よく出る商品</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {quickPickItems.map((m) => renderMenuButton(m, { big: true, disabled: !!activeTab.closed_at }))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="text-gold font-bold text-sm mb-2">メニュー</div>
+            {showCategoryTabs && (
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-0.5 px-0.5">
+                {menuCategories.map((cat) => {
+                  const color = categoryColorFor(cat === UNCATEGORIZED_LABEL ? null : cat);
+                  const active = cat === currentCategory;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      style={active ? { backgroundColor: `${color}26`, borderColor: color, color } : { borderColor: color }}
+                      className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-bold border-2 flex items-center gap-1.5 ${
+                        active ? "" : "text-gray-300"
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2.5">
+              {categoryMenuItems.map((m) => renderMenuButton(m, { disabled: !!activeTab.closed_at }))}
+            </div>
+          </div>
+
+          {!activeTab.closed_at && (
+            <div>
+              <div className="text-gold font-bold text-sm mb-2">自由入力で追加</div>
+              <div className="flex gap-2">
+                <input
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="品名"
+                  className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                />
+                <input
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="金額"
+                  inputMode="numeric"
+                  className="w-24 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                />
+                <button
+                  onClick={addManualItem}
+                  className="rounded-md px-3 py-1.5 text-sm border border-dashed border-gold text-gold shrink-0"
+                >
+                  ＋ 追加
+                </button>
+              </div>
+            </div>
+          )}
 
           <div
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
