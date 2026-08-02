@@ -5,6 +5,8 @@ export type Staff = {
   hourly_wage: number | null;
   active: boolean;
   commission_eligible: boolean;
+  base_salary: number | null;
+  special_allowance: number | null;
 };
 
 export type MenuItem = {

@@ -38,6 +38,7 @@ create table stores (
   enable_name_search        boolean not null default true,  -- 伝票を作る画面で、同じ名前の過去の伝票を検索表示するか
   name_input_mode           text not null default 'keyboard' check (name_input_mode in ('keyboard','kana_keypad')), -- 伝票の名前欄の入力方法（keyboard=通常のキーボード、kana_keypad=カタカナ専用ボタン）
   organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
+  owner_pin                 text, -- 設定タブの「オーナー専用」情報を開くための暗証番号。ログインアカウントは店舗で共有するため別途用意（DB上は平文。閲覧はRLSで店舗メンバーのみに制限されるが、あくまで同じ端末を使うスタッフからオーナー情報を隠すためのUI上のロックであり、暗号強度のセキュリティではない）
   created_at                timestamptz not null default now()
 );
 
@@ -75,6 +76,8 @@ create table staff (
   hourly_wage         numeric,           -- null = 時給未設定
   active              boolean not null default true,
   commission_eligible boolean not null default true, -- false = 歩合の対象外（伝票を担当してもその分は歩合計算に含めない）
+  base_salary         numeric,           -- 基本給（月給制の場合）。設定タブの「オーナー専用」ページの参照情報のみで、歩合・時給の自動計算には含めない
+  special_allowance   numeric,           -- 特別手当。同上、参照情報のみ
   created_at          timestamptz not null default now()
 );
 

@@ -56,6 +56,18 @@ export default function SettingsPage() {
   const [menuCategoryDrafts, setMenuCategoryDrafts] = useState<Record<string, string>>({});
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
+  // オーナー専用：店舗情報（暗証番号ロック）
+  const [ownerPin, setOwnerPin] = useState<string | null>(null);
+  const [ownerPinLoaded, setOwnerPinLoaded] = useState(false);
+  const [ownerUnlocked, setOwnerUnlocked] = useState(false);
+  const [showOwnerLock, setShowOwnerLock] = useState(false);
+  const [showPinChange, setShowPinChange] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinSetupInput, setPinSetupInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+  const [salaryDrafts, setSalaryDrafts] = useState<Record<string, { base: string; allowance: string }>>({});
+
   const [storeNameDraft, setStoreNameDraft] = useState(storeName ?? "");
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
   const [commissionRateDraft, setCommissionRateDraft] = useState(String(Math.round(commissionRate * 100)));
@@ -133,6 +145,17 @@ export default function SettingsPage() {
     setStaff(staffData ?? []);
     setWageDrafts(
       Object.fromEntries((staffData ?? []).map((s) => [s.id, s.hourly_wage != null ? String(s.hourly_wage) : ""]))
+    );
+    setSalaryDrafts(
+      Object.fromEntries(
+        (staffData ?? []).map((s) => [
+          s.id,
+          {
+            base: s.base_salary != null ? String(s.base_salary) : "",
+            allowance: s.special_allowance != null ? String(s.special_allowance) : "",
+          },
+        ])
+      )
     );
 
     const { data: tabLogsData } = await supabase
@@ -221,6 +244,65 @@ export default function SettingsPage() {
 
   async function toggleCommissionEligible(s: Staff) {
     await supabase.from("staff").update({ commission_eligible: !s.commission_eligible }).eq("id", s.id);
+    loadData();
+  }
+
+  async function openOwnerLock() {
+    setPinError("");
+    setPinInput("");
+    setShowOwnerLock(true);
+    if (!ownerPinLoaded && storeId) {
+      const { data } = await supabase.from("stores").select("owner_pin").eq("id", storeId).single();
+      setOwnerPin(data?.owner_pin ?? null);
+      setOwnerPinLoaded(true);
+    }
+  }
+
+  function submitPin() {
+    if (pinInput.trim() !== "" && pinInput === ownerPin) {
+      setOwnerUnlocked(true);
+      setShowOwnerLock(false);
+    } else {
+      setPinError("暗証番号が違います");
+      setPinInput("");
+    }
+  }
+
+  async function setupPin() {
+    if (!storeId || pinSetupInput.trim().length < 4) {
+      setPinError("4桁以上の数字で設定してください");
+      return;
+    }
+    setSavingPin(true);
+    await supabase.from("stores").update({ owner_pin: pinSetupInput.trim() }).eq("id", storeId);
+    setOwnerPin(pinSetupInput.trim());
+    setSavingPin(false);
+    setPinSetupInput("");
+    setPinError("");
+    setOwnerUnlocked(true);
+    setShowOwnerLock(false);
+  }
+
+  async function changePin() {
+    if (!storeId || pinSetupInput.trim().length < 4) {
+      setPinError("4桁以上の数字で設定してください");
+      return;
+    }
+    setSavingPin(true);
+    await supabase.from("stores").update({ owner_pin: pinSetupInput.trim() }).eq("id", storeId);
+    setOwnerPin(pinSetupInput.trim());
+    setSavingPin(false);
+    setPinSetupInput("");
+    setPinError("");
+    setShowPinChange(false);
+  }
+
+  async function saveSalary(staffId: string) {
+    const draft = salaryDrafts[staffId];
+    if (!draft) return;
+    const base = draft.base.trim() === "" ? null : Number(draft.base);
+    const allowance = draft.allowance.trim() === "" ? null : Number(draft.allowance);
+    await supabase.from("staff").update({ base_salary: base, special_allowance: allowance }).eq("id", staffId);
     loadData();
   }
 
@@ -871,6 +953,212 @@ export default function SettingsPage() {
           削除は元に戻せないため、会計前後にかかわらず削除時点の点数・金額を記録しています（直近100件まで表示）
         </div>
       </div>
+
+      <div>
+        <div className="text-gold font-bold text-sm mb-2">🔒 オーナー専用：店舗情報</div>
+        {!ownerUnlocked ? (
+          <button
+            onClick={openOwnerLock}
+            className="w-full rounded-xl border border-dashed border-gold/50 text-gold py-4 text-sm font-bold"
+          >
+            🔒 タップして暗証番号を入力
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center gap-2">
+              <div className="text-xs text-gray-500">
+                各スタッフの基本給・特別手当（参照情報のみ。歩合・時給の自動計算には含まれません）
+              </div>
+              <button
+                onClick={() => setOwnerUnlocked(false)}
+                className="text-xs text-gray-400 shrink-0"
+              >
+                🔒ロックする
+              </button>
+            </div>
+            {staff.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-line text-xs text-gray-500 text-center py-6">
+                スタッフが未登録です
+              </div>
+            ) : (
+              <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+                {staff.map((s) => {
+                  const draft = salaryDrafts[s.id] ?? { base: "", allowance: "" };
+                  const dirty =
+                    draft.base !== (s.base_salary != null ? String(s.base_salary) : "") ||
+                    draft.allowance !== (s.special_allowance != null ? String(s.special_allowance) : "");
+                  return (
+                    <div key={s.id} className="px-3 py-2.5 space-y-1.5">
+                      <div className="text-sm font-bold text-gray-200">{s.name}</div>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          value={draft.base}
+                          onChange={(e) =>
+                            setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, base: e.target.value } }))
+                          }
+                          placeholder="基本給(任意)"
+                          inputMode="numeric"
+                          className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                        />
+                        <input
+                          value={draft.allowance}
+                          onChange={(e) =>
+                            setSalaryDrafts((d) => ({ ...d, [s.id]: { ...draft, allowance: e.target.value } }))
+                          }
+                          placeholder="特別手当(任意)"
+                          inputMode="numeric"
+                          className="flex-1 min-w-0 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+                        />
+                        <button
+                          onClick={() => saveSalary(s.id)}
+                          disabled={!dirty}
+                          className="text-xs rounded-md border border-line px-2 py-1.5 text-gray-300 disabled:opacity-40 shrink-0"
+                        >
+                          保存
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setPinSetupInput("");
+                setPinError("");
+                setShowPinChange(true);
+              }}
+              className="text-xs text-gray-500 underline"
+            >
+              暗証番号を変更する
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showOwnerLock && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setShowOwnerLock(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4"
+          >
+            {!ownerPinLoaded ? (
+              <div className="text-sm text-gray-400 text-center py-4">読み込み中...</div>
+            ) : ownerPin == null ? (
+              <>
+                <div className="text-gold font-bold text-base">🔒 暗証番号を設定（初回のみ）</div>
+                <div className="text-xs text-gray-500">
+                  ログインはスタッフ全員で共有しているため、この暗証番号は他のスタッフには教えないでください
+                </div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus
+                  value={pinSetupInput}
+                  onChange={(e) => {
+                    setPinSetupInput(e.target.value);
+                    setPinError("");
+                  }}
+                  placeholder="4桁以上の数字"
+                  className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-lg tracking-widest text-center"
+                />
+                {pinError && <div className="text-xs text-rose">{pinError}</div>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowOwnerLock(false)}
+                    className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={setupPin}
+                    disabled={savingPin}
+                    className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold disabled:opacity-50"
+                  >
+                    設定する
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-gold font-bold text-base">🔒 暗証番号を入力</div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinInput(e.target.value);
+                    setPinError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitPin();
+                  }}
+                  placeholder="暗証番号"
+                  className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-lg tracking-widest text-center"
+                />
+                {pinError && <div className="text-xs text-rose">{pinError}</div>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowOwnerLock(false)}
+                    className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+                  >
+                    キャンセル
+                  </button>
+                  <button onClick={submitPin} className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold">
+                    開く
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showPinChange && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setShowPinChange(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4"
+          >
+            <div className="text-gold font-bold text-base">🔒 暗証番号を変更</div>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              value={pinSetupInput}
+              onChange={(e) => {
+                setPinSetupInput(e.target.value);
+                setPinError("");
+              }}
+              placeholder="新しい暗証番号（4桁以上）"
+              className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-lg tracking-widest text-center"
+            />
+            {pinError && <div className="text-xs text-rose">{pinError}</div>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowPinChange(false)}
+                className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={changePin}
+                disabled={savingPin}
+                className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold disabled:opacity-50"
+              >
+                変更する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
