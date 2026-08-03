@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore, NameInputMode } from "@/lib/StoreContext";
 import {
+  Attendance,
   MenuItem,
   Staff,
   CommissionScheme,
@@ -12,6 +13,7 @@ import {
   TabLog,
   TabWithItems,
   UNCATEGORIZED_LABEL,
+  hourlyLaborBreakdown,
   staffCommissionBreakdown,
 } from "@/lib/types";
 import { DEFAULT_REPORT_TEMPLATE, REPORT_TEMPLATE_TOKENS } from "@/lib/reportTemplate";
@@ -79,6 +81,20 @@ export default function SettingsPage() {
   const [salaryDrafts, setSalaryDrafts] = useState<Record<string, { base: string; allowance: string }>>({});
   const [monthCommission, setMonthCommission] = useState<StaffCommission[]>([]);
   const [monthCommissionLoaded, setMonthCommissionLoaded] = useState(false);
+  const [showPayslipPicker, setShowPayslipPicker] = useState(false);
+  const [payslipStaffId, setPayslipStaffId] = useState("");
+  const [payslipMonth, setPayslipMonth] = useState("");
+  const [generatingPayslip, setGeneratingPayslip] = useState(false);
+  const [payslipData, setPayslipData] = useState<{
+    staffName: string;
+    monthLabel: string;
+    base: number;
+    allowance: number;
+    commission: number;
+    hourlyHours: number;
+    hourlyCost: number;
+    total: number;
+  } | null>(null);
 
   const [storeNameDraft, setStoreNameDraft] = useState(storeName ?? "");
   const [taxRateDraft, setTaxRateDraft] = useState(String(Math.round(taxRate * 100)));
@@ -300,6 +316,72 @@ export default function SettingsPage() {
     );
     setMonthCommission(breakdown);
     setMonthCommissionLoaded(true);
+  }
+
+  function defaultPayslipMonth() {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); // 先月がデフォルト（明細は締め後に作るのが普通のため）
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  async function generatePayslip() {
+    if (!storeId || !payslipStaffId || !payslipMonth) return;
+    const s = staff.find((x) => x.id === payslipStaffId);
+    if (!s) return;
+    setGeneratingPayslip(true);
+
+    const [y, m] = payslipMonth.split("-").map(Number);
+    const start = `${payslipMonth}-01`;
+    const end = `${payslipMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+
+    const [{ data: tabsData }, { data: attData }] = await Promise.all([
+      supabase
+        .from("tabs")
+        .select("*, tab_items(*)")
+        .eq("store_id", storeId)
+        .gte("business_date", start)
+        .lte("business_date", end)
+        .not("closed_at", "is", null),
+      supabase
+        .from("attendance")
+        .select("*")
+        .eq("store_id", storeId)
+        .eq("staff_id", payslipStaffId)
+        .gte("business_date", start)
+        .lte("business_date", end),
+    ]);
+
+    const isEligible = (staffId: string) => staff.find((x) => x.id === staffId)?.commission_eligible ?? true;
+    const nameOf = (id: string | null) => staff.find((x) => x.id === id)?.name ?? "(元スタッフ)";
+    const commission =
+      staffCommissionBreakdown(
+        (tabsData as TabWithItems[]) ?? [],
+        nameOf,
+        taxRate,
+        commissionRate,
+        commissionScheme,
+        drinkBackAmount,
+        isEligible
+      ).find((c) => c.staffId === payslipStaffId)?.commission ?? 0;
+    const hourly = hourlyLaborBreakdown((attData as Attendance[]) ?? [], nameOf)[0] ?? null;
+
+    const base = s.base_salary ?? 0;
+    const allowance = s.special_allowance ?? 0;
+    const hourlyHours = hourly?.hours ?? 0;
+    const hourlyCost = hourly?.cost ?? 0;
+
+    setPayslipData({
+      staffName: s.name,
+      monthLabel: `${y}年${m}月`,
+      base,
+      allowance,
+      commission,
+      hourlyHours,
+      hourlyCost,
+      total: base + allowance + commission + hourlyCost,
+    });
+    setGeneratingPayslip(false);
+    setShowPayslipPicker(false);
   }
 
   function submitPin() {
@@ -1098,6 +1180,18 @@ export default function SettingsPage() {
                 )}
               </>
             )}
+            {staff.length > 0 && (
+              <button
+                onClick={() => {
+                  setPayslipStaffId(staff[0].id);
+                  setPayslipMonth(defaultPayslipMonth());
+                  setShowPayslipPicker(true);
+                }}
+                className="w-full rounded-xl border border-dashed border-gold/50 text-gold py-3 text-sm font-bold"
+              >
+                📄 給与明細を作成
+              </button>
+            )}
             <button
               onClick={() => {
                 setPinSetupInput("");
@@ -1234,6 +1328,138 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPayslipPicker && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setShowPayslipPicker(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4"
+          >
+            <div className="text-gold font-bold text-base">📄 給与明細を作成</div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">スタッフ</label>
+              <select
+                value={payslipStaffId}
+                onChange={(e) => setPayslipStaffId(e.target.value)}
+                className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+              >
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">対象月</label>
+              <input
+                type="month"
+                value={payslipMonth}
+                onChange={(e) => setPayslipMonth(e.target.value)}
+                className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowPayslipPicker(false)}
+                className="flex-1 rounded-md border border-line py-2.5 text-sm text-gray-300"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={generatePayslip}
+                disabled={generatingPayslip || !payslipStaffId || !payslipMonth}
+                className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold disabled:opacity-50"
+              >
+                {generatingPayslip ? "作成中..." : "作成する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payslipData && (
+        <>
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #payslip-print-area, #payslip-print-area * { visibility: visible; }
+              #payslip-print-area { position: absolute; top: 0; left: 0; width: 100%; }
+            }
+          `}</style>
+          <div className="fixed inset-0 z-50 bg-bg overflow-y-auto p-4 print:p-0 print:bg-white">
+            <div className="max-w-lg mx-auto flex justify-end gap-2 mb-4 print:hidden">
+              <button
+                onClick={() => setPayslipData(null)}
+                className="rounded-md border border-line py-2 px-4 text-sm text-gray-300"
+              >
+                閉じる
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="rounded-md bg-gold text-bg py-2 px-4 text-sm font-bold"
+              >
+                🖨 印刷 / PDF化
+              </button>
+            </div>
+            <div
+              id="payslip-print-area"
+              className="max-w-lg mx-auto bg-white text-black rounded-xl p-8 space-y-6"
+            >
+              <div className="text-center space-y-1">
+                <div className="text-xl font-bold">給与支給明細書</div>
+                <div className="text-sm text-gray-600">{storeName}</div>
+              </div>
+              <div className="flex justify-between items-baseline border-b border-gray-300 pb-3 text-sm">
+                <span className="font-bold">{payslipData.staffName} 様</span>
+                <span>{payslipData.monthLabel}分</span>
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  <tr className="border-b border-gray-200">
+                    <td className="py-2.5">基本給</td>
+                    <td className="py-2.5 text-right font-mono">¥{Math.round(payslipData.base).toLocaleString()}</td>
+                  </tr>
+                  <tr className="border-b border-gray-200">
+                    <td className="py-2.5">特別手当</td>
+                    <td className="py-2.5 text-right font-mono">
+                      ¥{Math.round(payslipData.allowance).toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-200">
+                    <td className="py-2.5">歩合給</td>
+                    <td className="py-2.5 text-right font-mono">
+                      ¥{Math.round(payslipData.commission).toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-200">
+                    <td className="py-2.5">時給分（{payslipData.hourlyHours.toFixed(1)}時間）</td>
+                    <td className="py-2.5 text-right font-mono">
+                      ¥{Math.round(payslipData.hourlyCost).toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pt-4 font-bold">支給合計</td>
+                    <td className="pt-4 text-right font-mono font-bold text-lg">
+                      ¥{Math.round(payslipData.total).toLocaleString()}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="text-xs text-gray-500 pt-4 border-t border-gray-300">
+                ※ 所得税・住民税・社会保険料等の控除は含まれていません。必要な場合は別途計算・記載してください。
+              </div>
+              <div className="text-xs text-gray-400">
+                発行日:{" "}
+                {new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" })}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
