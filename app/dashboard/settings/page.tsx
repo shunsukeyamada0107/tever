@@ -9,6 +9,7 @@ import {
   Staff,
   CommissionScheme,
   DEFAULT_DRINK_BACK_AMOUNT,
+  PayCycle,
   StaffCommission,
   TabLog,
   TabWithItems,
@@ -50,6 +51,7 @@ export default function SettingsPage() {
     acceptsOtherEpayment,
     enableNameSearch,
     nameInputMode,
+    payCycle,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -83,14 +85,16 @@ export default function SettingsPage() {
   const [monthCommissionLoaded, setMonthCommissionLoaded] = useState(false);
   const [showPayslipPicker, setShowPayslipPicker] = useState(false);
   const [payslipStaffId, setPayslipStaffId] = useState("");
-  const [payslipMonth, setPayslipMonth] = useState("");
+  const [payslipPeriod, setPayslipPeriod] = useState("");
   const [generatingPayslip, setGeneratingPayslip] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [payslipData, setPayslipData] = useState<{
     staffName: string;
     monthLabel: string;
     base: number;
     allowance: number;
     commission: number;
+    personalSales: number;
     hourlyHours: number;
     hourlyCost: number;
     total: number;
@@ -109,6 +113,7 @@ export default function SettingsPage() {
   const [acceptsOtherEpaymentDraft, setAcceptsOtherEpaymentDraft] = useState(acceptsOtherEpayment);
   const [enableNameSearchDraft, setEnableNameSearchDraft] = useState(enableNameSearch);
   const [nameInputModeDraft, setNameInputModeDraft] = useState<NameInputMode>(nameInputMode);
+  const [payCycleDraft, setPayCycleDraft] = useState<PayCycle>(payCycle);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -133,6 +138,7 @@ export default function SettingsPage() {
     setAcceptsOtherEpaymentDraft(acceptsOtherEpayment);
     setEnableNameSearchDraft(enableNameSearch);
     setNameInputModeDraft(nameInputMode);
+    setPayCycleDraft(payCycle);
   }, [
     storeName,
     taxRate,
@@ -150,6 +156,7 @@ export default function SettingsPage() {
     acceptsOtherEpayment,
     enableNameSearch,
     nameInputMode,
+    payCycle,
   ]);
 
   const loadData = useCallback(async () => {
@@ -318,21 +325,47 @@ export default function SettingsPage() {
     setMonthCommissionLoaded(true);
   }
 
-  function defaultPayslipMonth() {
+  // 支払いサイクルに応じて、明細作成の対象期間ピッカーのデフォルト値を返す
+  // （月払い="YYYY-MM"、週払い/日払い="YYYY-MM-DD"。締め後に作るのが普通なので、直近の完了済み期間をデフォルトにする）
+  function defaultPayslipPeriod() {
     const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); // 先月がデフォルト（明細は締め後に作るのが普通のため）
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    if (payCycle === "monthly") {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    }
+    const d = new Date(now);
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  // 支払いサイクルとピッカーの入力値から、実際に集計する日付範囲と明細の表示ラベルを組み立てる
+  function payslipPeriodRange(period: string): { start: string; end: string; label: string } {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    if (payCycle === "monthly") {
+      const [y, m] = period.split("-").map(Number);
+      const start = `${period}-01`;
+      const end = `${period}-${pad(new Date(y, m, 0).getDate())}`;
+      return { start, end, label: `${y}年${m}月分` };
+    }
+    if (payCycle === "weekly") {
+      const startDate = new Date(`${period}T12:00:00`);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
+      const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const short = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+      return { start: fmt(startDate), end: fmt(endDate), label: `${short(startDate)}〜${short(endDate)}分` };
+    }
+    return { start: period, end: period, label: `${period}分` };
   }
 
   async function generatePayslip() {
-    if (!storeId || !payslipStaffId || !payslipMonth) return;
+    if (!storeId || !payslipStaffId || !payslipPeriod) return;
     const s = staff.find((x) => x.id === payslipStaffId);
     if (!s) return;
     setGeneratingPayslip(true);
 
-    const [y, m] = payslipMonth.split("-").map(Number);
-    const start = `${payslipMonth}-01`;
-    const end = `${payslipMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+    const { start, end, label } = payslipPeriodRange(payslipPeriod);
 
     const [{ data: tabsData }, { data: attData }] = await Promise.all([
       supabase
@@ -353,16 +386,17 @@ export default function SettingsPage() {
 
     const isEligible = (staffId: string) => staff.find((x) => x.id === staffId)?.commission_eligible ?? true;
     const nameOf = (id: string | null) => staff.find((x) => x.id === id)?.name ?? "(元スタッフ)";
-    const commission =
-      staffCommissionBreakdown(
-        (tabsData as TabWithItems[]) ?? [],
-        nameOf,
-        taxRate,
-        commissionRate,
-        commissionScheme,
-        drinkBackAmount,
-        isEligible
-      ).find((c) => c.staffId === payslipStaffId)?.commission ?? 0;
+    const myCommission = staffCommissionBreakdown(
+      (tabsData as TabWithItems[]) ?? [],
+      nameOf,
+      taxRate,
+      commissionRate,
+      commissionScheme,
+      drinkBackAmount,
+      isEligible
+    ).find((c) => c.staffId === payslipStaffId);
+    const commission = myCommission?.commission ?? 0;
+    const personalSales = myCommission?.salesWithTax ?? 0;
     const hourly = hourlyLaborBreakdown((attData as Attendance[]) ?? [], nameOf)[0] ?? null;
 
     const base = s.base_salary ?? 0;
@@ -372,16 +406,41 @@ export default function SettingsPage() {
 
     setPayslipData({
       staffName: s.name,
-      monthLabel: `${y}年${m}月`,
+      monthLabel: label,
       base,
       allowance,
       commission,
+      personalSales,
       hourlyHours,
       hourlyCost,
       total: base + allowance + commission + hourlyCost,
     });
     setGeneratingPayslip(false);
     setShowPayslipPicker(false);
+  }
+
+  // 明細のDOMを画像化してPDFに埋め込む（jsPDF単体は日本語フォントを内蔵していないため、
+  // html2canvasで見たままを画像化する方式で日本語を含めて確実に出力する）
+  async function downloadPayslipPdf() {
+    if (!payslipData) return;
+    const el = document.getElementById("payslip-print-area");
+    if (!el) return;
+    setDownloadingPdf(true);
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ unit: "pt", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
+      pdf.save(`給与明細_${payslipData.staffName}_${payslipData.monthLabel}.pdf`);
+    } finally {
+      setDownloadingPdf(false);
+    }
   }
 
   function submitPin() {
@@ -468,6 +527,7 @@ export default function SettingsPage() {
         accepts_other_epayment: acceptsOtherEpaymentDraft,
         enable_name_search: enableNameSearchDraft,
         name_input_mode: nameInputModeDraft,
+        pay_cycle: payCycleDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -597,6 +657,20 @@ export default function SettingsPage() {
                   {h}時
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              給与の支払いサイクル（オーナー専用ページの給与明細作成で使う対象期間の単位）
+            </label>
+            <select
+              value={payCycleDraft}
+              onChange={(e) => setPayCycleDraft(e.target.value as PayCycle)}
+              className="w-32 rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            >
+              <option value="monthly">月払い</option>
+              <option value="weekly">週払い</option>
+              <option value="daily">日払い</option>
             </select>
           </div>
           <div>
@@ -1184,7 +1258,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => {
                   setPayslipStaffId(staff[0].id);
-                  setPayslipMonth(defaultPayslipMonth());
+                  setPayslipPeriod(defaultPayslipPeriod());
                   setShowPayslipPicker(true);
                 }}
                 className="w-full rounded-xl border border-dashed border-gold/50 text-gold py-3 text-sm font-bold"
@@ -1355,13 +1429,18 @@ export default function SettingsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">対象月</label>
+              <label className="block text-xs text-gray-400 mb-1">
+                {payCycle === "monthly" ? "対象月" : payCycle === "weekly" ? "週の開始日" : "対象日"}
+              </label>
               <input
-                type="month"
-                value={payslipMonth}
-                onChange={(e) => setPayslipMonth(e.target.value)}
+                type={payCycle === "monthly" ? "month" : "date"}
+                value={payslipPeriod}
+                onChange={(e) => setPayslipPeriod(e.target.value)}
                 className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
+              {payCycle === "weekly" && (
+                <div className="text-xs text-gray-500 mt-1">この日から7日間が対象になります</div>
+              )}
             </div>
             <div className="flex gap-2">
               <button
@@ -1372,7 +1451,7 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={generatePayslip}
-                disabled={generatingPayslip || !payslipStaffId || !payslipMonth}
+                disabled={generatingPayslip || !payslipStaffId || !payslipPeriod}
                 className="flex-1 rounded-md bg-gold text-bg py-2.5 text-sm font-bold disabled:opacity-50"
               >
                 {generatingPayslip ? "作成中..." : "作成する"}
@@ -1400,10 +1479,11 @@ export default function SettingsPage() {
                 閉じる
               </button>
               <button
-                onClick={() => window.print()}
-                className="rounded-md bg-gold text-bg py-2 px-4 text-sm font-bold"
+                onClick={downloadPayslipPdf}
+                disabled={downloadingPdf}
+                className="rounded-md bg-gold text-bg py-2 px-4 text-sm font-bold disabled:opacity-50"
               >
-                🖨 印刷 / PDF化
+                {downloadingPdf ? "作成中..." : "📥 PDFをダウンロード"}
               </button>
             </div>
             <div
@@ -1416,7 +1496,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-between items-baseline border-b border-gray-300 pb-3 text-sm">
                 <span className="font-bold">{payslipData.staffName} 様</span>
-                <span>{payslipData.monthLabel}分</span>
+                <span>{payslipData.monthLabel}</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
@@ -1428,6 +1508,12 @@ export default function SettingsPage() {
                     <td className="py-2.5">特別手当</td>
                     <td className="py-2.5 text-right font-mono">
                       ¥{Math.round(payslipData.allowance).toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-100 text-gray-500 text-xs">
+                    <td className="py-1.5">個人総売上（歩合の元）</td>
+                    <td className="py-1.5 text-right font-mono">
+                      ¥{Math.round(payslipData.personalSales).toLocaleString()}
                     </td>
                   </tr>
                   <tr className="border-b border-gray-200">

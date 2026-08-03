@@ -139,6 +139,8 @@ export const DEFAULT_DRINK_BACK_AMOUNT = 200;
 
 export type CommissionScheme = "simple" | "drink_back";
 
+export type PayCycle = "monthly" | "weekly" | "daily";
+
 export function itemSubtotal(item: Pick<TabItem, "price" | "qty">) {
   return item.price * item.qty;
 }

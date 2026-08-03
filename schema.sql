@@ -39,6 +39,7 @@ create table stores (
   name_input_mode           text not null default 'keyboard' check (name_input_mode in ('keyboard','kana_keypad')), -- 伝票の名前欄の入力方法（keyboard=通常のキーボード、kana_keypad=カタカナ専用ボタン）
   organization_id           uuid references organizations(id) on delete set null, -- 複数店舗を運営する組織に属する場合
   owner_pin                 text, -- 設定タブの「オーナー専用」情報を開くための暗証番号。ログインアカウントは店舗で共有するため別途用意（DB上は平文。閲覧はRLSで店舗メンバーのみに制限されるが、あくまで同じ端末を使うスタッフからオーナー情報を隠すためのUI上のロックであり、暗号強度のセキュリティではない）
+  pay_cycle                 text not null default 'monthly' check (pay_cycle in ('monthly','weekly','daily')), -- 給与の支払いサイクル（monthly=月払い、weekly=週払い、daily=日払い）。給与明細作成時の対象期間の選び方に反映される
   created_at                timestamptz not null default now()
 );
 
