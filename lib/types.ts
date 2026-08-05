@@ -258,17 +258,23 @@ export type StaffCommission = {
   commission: number;
 };
 
+export type CommissionTaxBasis = "with_tax" | "pre_tax";
+export const DEFAULT_COMMISSION_TAX_BASIS: CommissionTaxBasis = "with_tax";
+
 // 歩合給: 会計済み（closed_atがある）伝票の売上を、品目ごとの担当（tab_items.staff_id で個別指定があればそれ、
 // 無ければ伝票の担当 tabs.staff_id）で按分する。
 // 例: 伝票の担当はAさんだが、シャンパンだけBさんに個別指定した場合、シャンパン分だけBさんの歩合になる。
 //
-// 按分の元にする金額は2パターンある:
+// taxBasis="with_tax"（既定）: 消費税込みの金額を歩合の元にする。按分の元にする金額は2パターンある:
 // ・伝票を1人で丸ごと担当している場合（按分比率100%）: 実際にレジを通った金額（100円切り上げ後の会計額）そのもの。
 //   全額その人が集めたお金なので、切り上げ分も含めて実際に入った額を歩合の元にする。
 // ・複数人で分け合っている場合: 切り上げ前の金額（税込・割引後）を按分比率で分けた額に、
 //   その伝票の「デフォルト担当」（tabs.staff_id）にだけ切り上げ差額（会計額－切り上げ前）を上乗せする。
 //   一部の品目だけ他のスタッフに個別指定されていても、伝票そのものの責任者はデフォルト担当なので、
 //   端数（切り上げのおまけ）はその人に寄せる。デフォルト担当が未設定の伝票では、この差額は誰にも乗らない。
+// taxBasis="pre_tax": 消費税抜きの小計を歩合の元にする。割引が入っている場合は、税込ベースで見た「割引後に残る割合」
+//   （割引後金額÷割引前金額）を税抜小計にもそのままかけて、割引の影響だけは税込・税抜どちらでも同じ比率になるようにする。
+//   レジの100円切り上げは会計時の端数処理であって税抜の売上そのものではないため、この場合は反映しない。
 //
 // scheme="simple"（既定）: 按分した売上にcommissionRateを掛けるだけ。
 // scheme="drink_back": 按分した売上のうち、is_cast_drinkな品目分を除いた額にcommissionRateを掛けたもの（売上バック）に、
@@ -280,7 +286,8 @@ export function staffCommissionBreakdown(
   commissionRate: number = DEFAULT_COMMISSION_RATE,
   scheme: CommissionScheme = "simple",
   drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT,
-  isCommissionEligible: (staffId: string) => boolean = () => true
+  isCommissionEligible: (staffId: string) => boolean = () => true,
+  taxBasis: CommissionTaxBasis = DEFAULT_COMMISSION_TAX_BASIS
 ): StaffCommission[] {
   const map: Record<string, StaffCommission> = {};
   tabs.forEach((t) => {
@@ -288,11 +295,14 @@ export function staffCommissionBreakdown(
     const sub = tabSubtotal(t.tab_items);
     if (sub <= 0) return;
 
+    const preDiscountTotal = tabPreDiscountTotal(t.tab_items, taxRate);
     const adjustedTotal =
-      tabPreDiscountTotal(t.tab_items, taxRate) -
-      tabDiscountAmount(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+      preDiscountTotal - tabDiscountAmount(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
     const roundedTotal = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
     const roundUpBonus = roundedTotal - adjustedTotal;
+    // 割引後に残る割合（税込ベース）を税抜小計にも適用し、割引の効き方だけは税込・税抜で揃える
+    const keepRatio = preDiscountTotal > 0 ? adjustedTotal / preDiscountTotal : 1;
+    const preTaxAdjustedTotal = sub * keepRatio;
 
     // 品目ごとの個別指定があればそれを優先、無ければ伝票の担当スタッフ（未設定・歩合対象外は集計しない）
     const byStaff: Record<string, number> = {};
@@ -310,10 +320,12 @@ export function staffCommissionBreakdown(
 
     Object.entries(byStaff).forEach(([key, rawSub]) => {
       const shareRatio = rawSub / sub;
-      // 1人で丸ごと担当（比率100%）なら実際の会計額を、複数人で分け合うなら切り上げ前の金額を按分する。
-      // 分け合う場合でも、伝票のデフォルト担当には切り上げ差額を追加で乗せる（伝票そのものの責任者のため）
-      const basis = shareRatio === 1 ? roundedTotal : adjustedTotal;
-      const salesWithTax = basis * shareRatio + (shareRatio < 1 && key === t.staff_id ? roundUpBonus : 0);
+      // 税抜モード：割引後の税抜小計をそのまま按分（切り上げの概念自体がないので分岐なし）。
+      // 税込モード：1人で丸ごと担当なら実際の会計額を、複数人で分け合うなら切り上げ前の金額を按分し、
+      //   分け合う場合は伝票のデフォルト担当にだけ切り上げ差額を上乗せする（伝票そのものの責任者のため）
+      const basis = taxBasis === "pre_tax" ? preTaxAdjustedTotal : shareRatio === 1 ? roundedTotal : adjustedTotal;
+      const roundUpForThis = taxBasis === "with_tax" && shareRatio < 1 && key === t.staff_id ? roundUpBonus : 0;
+      const salesWithTax = basis * shareRatio + roundUpForThis;
 
       if (!map[key]) {
         map[key] = {
@@ -372,7 +384,8 @@ export function daySummary(
   commissionRate: number = DEFAULT_COMMISSION_RATE,
   commissionScheme: CommissionScheme = "simple",
   drinkBackAmount: number = DEFAULT_DRINK_BACK_AMOUNT,
-  isCommissionEligible: (staffId: string) => boolean = () => true
+  isCommissionEligible: (staffId: string) => boolean = () => true,
+  commissionTaxBasis: CommissionTaxBasis = DEFAULT_COMMISSION_TAX_BASIS
 ): DaySummary {
   const subtotal = tabs.reduce((a, t) => a + tabSubtotal(t.tab_items), 0);
   const tax = tabs.reduce((a, t) => a + tabTax(t.tab_items, taxRate), 0);
@@ -384,7 +397,8 @@ export function daySummary(
     commissionRate,
     commissionScheme,
     drinkBackAmount,
-    isCommissionEligible
+    isCommissionEligible,
+    commissionTaxBasis
   ).reduce(
     (a, c) => a + c.commission,
     0

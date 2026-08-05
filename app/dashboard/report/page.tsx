@@ -101,6 +101,7 @@ export default function ReportPage() {
     cashFloatAmount,
     commissionScheme,
     drinkBackAmount,
+    commissionTaxBasis,
     showInsights,
   } = useStore();
   const { date: businessDate, isToday } = useBusinessDate();
@@ -231,7 +232,8 @@ export default function ReportPage() {
             commissionRate,
             commissionScheme,
             drinkBackAmount,
-            isEligibleOf
+            isEligibleOf,
+            commissionTaxBasis
           ),
         };
       });
@@ -249,7 +251,8 @@ export default function ReportPage() {
         commissionRate,
         commissionScheme,
         drinkBackAmount,
-        isEligibleOf
+        isEligibleOf,
+        commissionTaxBasis
       )
     );
   }, [
@@ -263,6 +266,7 @@ export default function ReportPage() {
     commissionRate,
     commissionScheme,
     drinkBackAmount,
+    commissionTaxBasis,
   ]);
 
   useEffect(() => {
@@ -302,7 +306,8 @@ export default function ReportPage() {
     commissionRate,
     commissionScheme,
     drinkBackAmount,
-    isEligible
+    isEligible,
+    commissionTaxBasis
   );
   const commission = staffCommissionBreakdown(
     tabs,
@@ -311,7 +316,8 @@ export default function ReportPage() {
     commissionRate,
     commissionScheme,
     drinkBackAmount,
-    isEligible
+    isEligible,
+    commissionTaxBasis
   );
   const hourlyLabor = hourlyLaborBreakdown(attendance, staffName);
   const laborRows = buildLaborRows(hourlyLabor, commission, staff);
@@ -362,7 +368,8 @@ export default function ReportPage() {
     commissionRate,
     commissionScheme,
     drinkBackAmount,
-    isEligible
+    isEligible,
+    commissionTaxBasis
   );
   const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
   const monthLaborRows = buildLaborRows(monthHourlyLabor, monthCommission, staff);

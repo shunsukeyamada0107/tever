@@ -8,6 +8,7 @@ import {
   MenuItem,
   Staff,
   CommissionScheme,
+  CommissionTaxBasis,
   DEFAULT_DRINK_BACK_AMOUNT,
   PayCycle,
   StaffCommission,
@@ -52,6 +53,7 @@ export default function SettingsPage() {
     enableNameSearch,
     nameInputMode,
     payCycle,
+    commissionTaxBasis,
     reload,
   } = useStore();
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -114,6 +116,7 @@ export default function SettingsPage() {
   const [enableNameSearchDraft, setEnableNameSearchDraft] = useState(enableNameSearch);
   const [nameInputModeDraft, setNameInputModeDraft] = useState<NameInputMode>(nameInputMode);
   const [payCycleDraft, setPayCycleDraft] = useState<PayCycle>(payCycle);
+  const [commissionTaxBasisDraft, setCommissionTaxBasisDraft] = useState<CommissionTaxBasis>(commissionTaxBasis);
   const [commissionSchemeDraft, setCommissionSchemeDraft] = useState<CommissionScheme>(commissionScheme);
   const [drinkBackAmountDraft, setDrinkBackAmountDraft] = useState(String(drinkBackAmount));
   const [savingStoreSettings, setSavingStoreSettings] = useState(false);
@@ -139,6 +142,7 @@ export default function SettingsPage() {
     setEnableNameSearchDraft(enableNameSearch);
     setNameInputModeDraft(nameInputMode);
     setPayCycleDraft(payCycle);
+    setCommissionTaxBasisDraft(commissionTaxBasis);
   }, [
     storeName,
     taxRate,
@@ -157,6 +161,7 @@ export default function SettingsPage() {
     enableNameSearch,
     nameInputMode,
     payCycle,
+    commissionTaxBasis,
   ]);
 
   const loadData = useCallback(async () => {
@@ -319,7 +324,8 @@ export default function SettingsPage() {
       commissionRate,
       commissionScheme,
       drinkBackAmount,
-      isEligible
+      isEligible,
+      commissionTaxBasis
     );
     setMonthCommission(breakdown);
     setMonthCommissionLoaded(true);
@@ -393,7 +399,8 @@ export default function SettingsPage() {
       commissionRate,
       commissionScheme,
       drinkBackAmount,
-      isEligible
+      isEligible,
+      commissionTaxBasis
     ).find((c) => c.staffId === payslipStaffId);
     const commission = myCommission?.commission ?? 0;
     const personalSales = myCommission?.salesWithTax ?? 0;
@@ -528,6 +535,7 @@ export default function SettingsPage() {
         enable_name_search: enableNameSearchDraft,
         name_input_mode: nameInputModeDraft,
         pay_cycle: payCycleDraft,
+        commission_tax_basis: commissionTaxBasisDraft,
       })
       .eq("id", storeId);
     setSavingStoreSettings(false);
@@ -618,6 +626,22 @@ export default function SettingsPage() {
               {commissionSchemeDraft === "drink_back"
                 ? "（担当伝票の売上 − キャストドリンク代）× 歩合率 ＋ キャストドリンク数 × ドリンクバック単価"
                 : "担当した伝票の売上（実会計額）に、そのまま歩合率を掛けます"}
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">歩合の計算に使う金額の基準</label>
+            <select
+              value={commissionTaxBasisDraft}
+              onChange={(e) => setCommissionTaxBasisDraft(e.target.value as CommissionTaxBasis)}
+              className="w-full rounded-md bg-bg2 border border-line px-2 py-1.5 text-sm"
+            >
+              <option value="with_tax">消費税込みの金額（実際の会計額ベース）</option>
+              <option value="pre_tax">消費税抜きの小計</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {commissionTaxBasisDraft === "pre_tax"
+                ? "レジの100円切り上げは反映されません（税抜の小計そのものが対象のため）"
+                : "1人で丸ごと担当した伝票は、レジで実際に切り上げられた金額まで含めて歩合の対象になります"}
             </p>
           </div>
           <div>

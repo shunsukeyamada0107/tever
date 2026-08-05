@@ -265,6 +265,29 @@ describe("staffCommissionBreakdown — simple scheme", () => {
   });
 });
 
+describe("staffCommissionBreakdown — taxBasis='pre_tax'", () => {
+  it("uses the tax-excluded subtotal as the commission base, ignoring the round-up entirely", () => {
+    const t = tab({
+      staff_id: "a",
+      tab_items: [item({ price: 1000, qty: 3 })], // 小計3000 -> 税込3300
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple", 200, () => true, "pre_tax");
+    expect(result[0].salesWithTax).toBeCloseTo(3000, 5);
+    expect(result[0].commission).toBeCloseTo(600, 5); // 3000 * 0.2
+  });
+
+  it("still applies the discount's keep-ratio (税込ベースで見た割引後の残存割合) to the pre-tax subtotal", () => {
+    const t = tab({
+      staff_id: "a",
+      discount_amount: 500,
+      tab_items: [item({ price: 2400, qty: 1 })], // 小計2400 -> 税込2640 -> 割引後2140
+    });
+    const result = staffCommissionBreakdown([t], staffNameOf, 0.1, 0.2, "simple", 200, () => true, "pre_tax");
+    const keepRatio = 2140 / 2640;
+    expect(result[0].salesWithTax).toBeCloseTo(2400 * keepRatio, 5);
+  });
+});
+
 describe("staffCommissionBreakdown — drink_back scheme (matches the spec example)", () => {
   it("30,000円の売上・5,000円のドリンク・5杯で 売上バック2,500円+ドリンクバック1,000円=3,500円になる", () => {
     const t = tab({
