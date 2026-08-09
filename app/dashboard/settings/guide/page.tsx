@@ -28,6 +28,95 @@ function Mock({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl border border-line bg-elevated p-3 space-y-2">{children}</div>;
 }
 
+// ---- 挿絵（手描き風のシンプルなSVGイラスト） ----
+
+function TicketArt() {
+  return (
+    <svg viewBox="0 0 140 100" className="w-32 h-auto mx-auto" aria-hidden="true">
+      <path
+        d="M14 14 h112 a4 4 0 0 1 4 4 v20 a8 8 0 0 0 0 16 v20 a4 4 0 0 1 -4 4 H14 a4 4 0 0 1 -4 -4 V74 a8 8 0 0 0 0 -16 V18 a4 4 0 0 1 4 -4 Z"
+        fill="var(--elevated, #1e1a27)"
+        stroke="var(--gold, #dca84e)"
+        strokeWidth="2"
+      />
+      <circle cx="70" cy="14" r="3" fill="var(--gold, #dca84e)" opacity="0.6" />
+      <line x1="26" y1="34" x2="90" y2="34" stroke="var(--gold, #dca84e)" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+      <line x1="26" y1="46" x2="70" y2="46" stroke="#8a7fa0" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+      <line x1="26" y1="58" x2="80" y2="58" stroke="#8a7fa0" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+      <text x="114" y="38" textAnchor="end" fontSize="11" fontWeight="700" fill="var(--gold, #dca84e)">¥800</text>
+      <text x="114" y="50" textAnchor="end" fontSize="11" fontWeight="700" fill="#8a7fa0">¥900</text>
+      <text x="114" y="62" textAnchor="end" fontSize="11" fontWeight="700" fill="#8a7fa0">¥1,200</text>
+    </svg>
+  );
+}
+
+function Badge({ tone, children }: { tone: "gold" | "good" | "blue" | "rose"; children: React.ReactNode }) {
+  const toneMap = {
+    gold: "bg-gold/12 text-gold",
+    good: "bg-good/12 text-good",
+    blue: "bg-[#6FB3E0]/12 text-[#6FB3E0]",
+    rose: "bg-rose/12 text-rose",
+  } as const;
+  return (
+    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-1 ${toneMap[tone]}`}>
+      {children}
+    </div>
+  );
+}
+
+function WalletIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="12" width="28" height="20" rx="4" />
+      <path d="M6 18h28" />
+      <circle cx="26" cy="24" r="2.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="20" cy="20" r="14" />
+      <path d="M20 12v9l6 4" />
+    </svg>
+  );
+}
+
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-7 h-7" fill="none">
+      <rect x="7" y="22" width="6" height="11" rx="1.5" fill="currentColor" opacity="0.55" />
+      <rect x="17" y="14" width="6" height="19" rx="1.5" fill="currentColor" opacity="0.8" />
+      <rect x="27" y="7" width="6" height="26" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  const teeth = Array.from({ length: 8 });
+  return (
+    <svg viewBox="0 0 40 40" className="w-7 h-7" fill="currentColor">
+      {teeth.map((_, i) => (
+        <rect key={i} x="18" y="2" width="4" height="8" rx="1.5" transform={`rotate(${i * 45} 20 20)`} />
+      ))}
+      <circle cx="20" cy="20" r="9" />
+      <circle cx="20" cy="20" r="3.5" fill="var(--elevated, #1e1a27)" />
+    </svg>
+  );
+}
+
+function LifeRingIcon() {
+  return (
+    <svg viewBox="0 0 40 40" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="3">
+      <circle cx="20" cy="20" r="15" />
+      <text x="20" y="26" textAnchor="middle" fontSize="18" fontWeight="800" stroke="none" fill="currentColor">
+        ?
+      </text>
+    </svg>
+  );
+}
+
 export default function GuidePage() {
   return (
     <div className="space-y-8 pb-8">
@@ -58,8 +147,9 @@ export default function GuidePage() {
       {/* ===== 1. 伝票・会計 ===== */}
       <section id="pos" className="space-y-5 scroll-mt-16">
         <div>
-          <h2 className="text-gold font-bold text-base">🧾 伝票を作る・会計する</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <TicketArt />
+          <h2 className="text-gold font-bold text-base text-center mt-2">🧾 伝票を作る・会計する</h2>
+          <p className="text-xs text-gray-500 mt-1 text-center">
             お店に入る一番最初の画面。夜の業務のほとんどはここで完結します。
           </p>
         </div>
@@ -174,8 +264,11 @@ export default function GuidePage() {
       {/* ===== 2. 経費・出退勤 ===== */}
       <section id="expense" className="space-y-3 scroll-mt-16">
         <div>
-          <h2 className="text-gold font-bold text-base">💰 経費・出退勤をつける</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <Badge tone="good">
+            <WalletIcon />
+          </Badge>
+          <h2 className="text-gold font-bold text-base text-center">💰 経費・出退勤をつける</h2>
+          <p className="text-xs text-gray-500 mt-1 text-center">
             下のタブの「経費」から。買い出しの記録と、時給スタッフの出勤・退勤もここでつけます。
           </p>
         </div>
@@ -199,8 +292,13 @@ export default function GuidePage() {
       {/* ===== 3. 集計 ===== */}
       <section id="report" className="space-y-3 scroll-mt-16">
         <div>
-          <h2 className="text-gold font-bold text-base">📊 今日の売上・歩合を見る</h2>
-          <p className="text-xs text-gray-500 mt-1">下のタブの「集計」で、今日と今月の数字をいつでも確認できます。</p>
+          <Badge tone="blue">
+            <ChartIcon />
+          </Badge>
+          <h2 className="text-gold font-bold text-base text-center">📊 今日の売上・歩合を見る</h2>
+          <p className="text-xs text-gray-500 mt-1 text-center">
+            下のタブの「集計」で、今日と今月の数字をいつでも確認できます。
+          </p>
         </div>
         <Mock>
           <div className="flex justify-between text-xs text-gray-400">
@@ -226,8 +324,11 @@ export default function GuidePage() {
       {/* ===== 4. 設定 ===== */}
       <section id="settings" className="space-y-3 scroll-mt-16">
         <div>
-          <h2 className="text-gold font-bold text-base">⚙️ 設定</h2>
-          <p className="text-xs text-gray-500 mt-1">メニューやスタッフの登録・変更は、このタブから行います。</p>
+          <Badge tone="gold">
+            <GearIcon />
+          </Badge>
+          <h2 className="text-gold font-bold text-base text-center">⚙️ 設定</h2>
+          <p className="text-xs text-gray-500 mt-1 text-center">メニューやスタッフの登録・変更は、このタブから行います。</p>
         </div>
         <div className="grid grid-cols-1 gap-2">
           <div className="rounded-xl border border-line bg-elevated p-3 flex items-center gap-3">
@@ -259,7 +360,10 @@ export default function GuidePage() {
 
       {/* ===== FAQ ===== */}
       <section id="faq" className="space-y-2 scroll-mt-16">
-        <h2 className="text-gold font-bold text-base">🆘 困ったときは</h2>
+        <Badge tone="rose">
+          <LifeRingIcon />
+        </Badge>
+        <h2 className="text-gold font-bold text-base text-center">🆘 困ったときは</h2>
         {[
           {
             q: "商品を押し間違えた・数を間違えた",
