@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import { useStore, NameInputMode } from "@/lib/StoreContext";
 import {
@@ -592,6 +593,14 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      <Link
+        href="/dashboard/settings/guide"
+        className="flex items-center justify-between rounded-xl border border-gold/40 bg-gold/10 px-4 py-3.5"
+      >
+        <span className="flex items-center gap-2 font-bold text-sm text-gold">📖 アプリの使い方ガイド</span>
+        <span className="text-gold text-lg">›</span>
+      </Link>
+
       <div>
         <div className="text-gold font-bold text-sm mb-2">店舗設定</div>
         <div className="rounded-xl border border-line bg-elevated p-3 space-y-3">
