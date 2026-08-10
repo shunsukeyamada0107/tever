@@ -751,6 +751,65 @@ function POSPageInner() {
     );
   }
 
+  function SectionHeader({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+    return (
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className="w-8 h-8 rounded-full bg-gold/12 text-gold flex items-center justify-center shrink-0">
+          {icon}
+        </span>
+        <span className="font-extrabold text-base">{children}</span>
+      </div>
+    );
+  }
+
+  function PeopleSectionIcon() {
+    return (
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+        <circle cx="18" cy="9" r="2.3" />
+        <path d="M15.3 14.3c2.5.5 4.2 2.5 4.2 5.7" />
+      </svg>
+    );
+  }
+
+  function ReceiptSectionIcon() {
+    return (
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
+        <path d="M9 8h6M9 12h6" />
+      </svg>
+    );
+  }
+
+  function CupSectionIcon() {
+    return (
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 3h12l-1.6 12.5a4.4 4.4 0 0 1-8.8 0L6 3Z" />
+        <path d="M9 21h6M12 15.5V21" />
+      </svg>
+    );
+  }
+
+  function PlusSectionIcon() {
+    return (
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v8M8 12h8" />
+      </svg>
+    );
+  }
+
+  function CashSectionIcon() {
+    return (
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M6 6v12M18 6v12" />
+      </svg>
+    );
+  }
+
   function renderCheckoutSummary(tab: TabWithItems) {
     return (
       <div className="space-y-3">
@@ -1095,8 +1154,8 @@ function POSPageInner() {
           </div>
 
           {staff.length > 0 && (
-            <div>
-              <div className="text-gold font-bold text-sm mb-2">担当スタッフ（この伝票の歩合対象）</div>
+            <div className="rounded-xl border border-line bg-elevated p-4">
+              <SectionHeader icon={<PeopleSectionIcon />}>担当スタッフ（この伝票の歩合対象）</SectionHeader>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {staff.map((s) => (
                   <button
@@ -1112,16 +1171,16 @@ function POSPageInner() {
                   </button>
                 ))}
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-sm text-gray-400 mt-2">
                 この伝票の売上全体が、選択したスタッフの歩合給の対象になります（もう一度タップで解除、会計済みでも変更できます）
               </div>
             </div>
           )}
 
-          <div>
-            <div className="text-gold font-bold text-sm mb-2">
+          <div className="rounded-xl border border-line p-4">
+            <SectionHeader icon={<ReceiptSectionIcon />}>
               伝票内容（{activeTab.tab_items.reduce((a, i) => a + i.qty, 0)}点）
-            </div>
+            </SectionHeader>
             {activeTab.tab_items.length === 0 ? (
               <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
                 まだ商品が記録されていません
@@ -1207,17 +1266,16 @@ function POSPageInner() {
             )}
           </div>
 
-          {quickPickItems.length > 0 && (
-            <div>
-              <div className="text-gold font-bold text-sm mb-2">⭐ よく出る商品</div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {quickPickItems.map((m) => renderMenuButton(m, { big: true, disabled: !!activeTab.closed_at }))}
+          <div className="rounded-xl border border-line bg-elevated p-4">
+            <SectionHeader icon={<CupSectionIcon />}>メニュー</SectionHeader>
+            {quickPickItems.length > 0 && (
+              <div className="mb-3">
+                <div className="text-sm font-extrabold text-gold mb-1.5">⭐ よく出る商品</div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {quickPickItems.map((m) => renderMenuButton(m, { big: true, disabled: !!activeTab.closed_at }))}
+                </div>
               </div>
-            </div>
-          )}
-
-          <div>
-            <div className="text-gold font-bold text-sm mb-2">メニュー</div>
+            )}
             {showCategoryTabs && (
               <div className="flex gap-2 overflow-x-auto pb-2 -mx-0.5 px-0.5">
                 {menuCategories.map((cat) => {
@@ -1245,8 +1303,8 @@ function POSPageInner() {
           </div>
 
           {!activeTab.closed_at && (
-            <div>
-              <div className="text-gold font-bold text-sm mb-2">自由入力で追加</div>
+            <div className="rounded-xl border border-line bg-elevated p-4">
+              <SectionHeader icon={<PlusSectionIcon />}>自由入力で追加</SectionHeader>
               <div className="flex gap-2">
                 <input
                   value={manualName}
@@ -1275,7 +1333,7 @@ function POSPageInner() {
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
             className="rounded-xl border border-line bg-elevated p-4"
           >
-            <div className="text-gold font-bold text-sm mb-2">会計</div>
+            <SectionHeader icon={<CashSectionIcon />}>会計</SectionHeader>
             {renderCheckoutSummary(activeTab)}
           </div>
         </>
