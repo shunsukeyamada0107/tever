@@ -33,6 +33,72 @@ const ACCENT_PRESETS = [
   { name: "Carbon", hex: "#C7CDD6" },
 ] as const;
 
+function SectionHeader({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span className="w-8 h-8 rounded-full bg-gold/12 text-gold flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <span className="font-extrabold text-base">{children}</span>
+    </div>
+  );
+}
+
+function GearSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z" />
+    </svg>
+  );
+}
+
+function DocumentSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 2h8l4 4v16H7Z" />
+      <path d="M15 2v4h4M9 12h6M9 16h6" />
+    </svg>
+  );
+}
+
+function CupSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h12l-1.6 12.5a4.4 4.4 0 0 1-8.8 0L6 3Z" />
+      <path d="M9 21h6M12 15.5V21" />
+    </svg>
+  );
+}
+
+function PeopleSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <circle cx="18" cy="9" r="2.3" />
+      <path d="M15.3 14.3c2.5.5 4.2 2.5 4.2 5.7" />
+    </svg>
+  );
+}
+
+function ListSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+
+function LockSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="10" width="16" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
 export default function SettingsPage() {
   const supabase = createClient();
   const {
@@ -601,8 +667,8 @@ export default function SettingsPage() {
         <span className="text-gold text-lg">›</span>
       </Link>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">店舗設定</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<GearSectionIcon />}>店舗設定</SectionHeader>
         <div className="rounded-xl border border-line bg-elevated p-3 space-y-3">
           <div>
             <label className="block text-xs text-gray-400 mb-1">店舗名</label>
@@ -896,8 +962,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">LINE報告レポートのひな形</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<DocumentSectionIcon />}>LINE報告レポートのひな形</SectionHeader>
         <div className="rounded-xl border border-line bg-elevated p-3 space-y-2">
           <div className="text-xs text-gray-500">
             集計タブの「報告レポート」ボタンで生成される文章のひな形です。{"{{sales}}"}
@@ -942,8 +1008,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">メニュー管理</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<CupSectionIcon />}>メニュー管理</SectionHeader>
         <div className="rounded-xl border border-line bg-elevated divide-y divide-line mb-2">
           {menu.length === 0 && (
             <div className="text-sm text-gray-500 text-center py-6">メニューが未登録です</div>
@@ -1087,8 +1153,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">スタッフ管理</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<PeopleSectionIcon />}>スタッフ管理</SectionHeader>
         {staff.length === 0 ? (
           <div className="rounded-xl border border-line bg-elevated">
             <div className="text-sm text-gray-500 text-center py-6">
@@ -1146,8 +1212,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">伝票ログ（作成・削除の履歴）</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<ListSectionIcon />}>伝票ログ（作成・削除の履歴）</SectionHeader>
         {tabLogs.length === 0 ? (
           <div className="rounded-xl border border-line bg-elevated text-sm text-gray-500 text-center py-6">
             まだ記録がありません
@@ -1189,8 +1255,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">🔒 オーナー専用：店舗情報</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<LockSectionIcon />}>オーナー専用：店舗情報</SectionHeader>
         {!ownerUnlocked ? (
           <button
             onClick={openOwnerLock}

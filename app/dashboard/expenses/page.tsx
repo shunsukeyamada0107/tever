@@ -7,6 +7,44 @@ import { useBusinessDate } from "@/lib/BusinessDateContext";
 import { DateBar } from "@/lib/DateBar";
 import { Expense, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_ICONS, EXPENSE_CATEGORY_COLORS, Staff, Attendance, attHours } from "@/lib/types";
 
+function SectionHeader({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span className="w-8 h-8 rounded-full bg-gold/12 text-gold flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <span className="font-extrabold text-base">{children}</span>
+    </div>
+  );
+}
+
+function PlusSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+
+function ReceiptSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
+  );
+}
+
+function ClockSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
 export default function ExpensesPage() {
   const supabase = createClient();
   const { storeId, cutoffHour } = useStore();
@@ -158,11 +196,11 @@ export default function ExpensesPage() {
   })).filter((c) => c.amount > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DateBar />
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">経費を追加</div>
-        <div className="rounded-xl border border-line bg-elevated p-3 space-y-2">
+      <div className="rounded-xl border border-line bg-elevated p-4">
+        <SectionHeader icon={<PlusSectionIcon />}>経費を追加</SectionHeader>
+        <div className="space-y-2">
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -227,9 +265,14 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      <div>
-        <div className="flex justify-between items-center mb-2">
-          <div className="text-gold font-bold text-sm">{businessDate}の経費</div>
+      <div className="rounded-xl border border-line p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-full bg-gold/12 text-gold flex items-center justify-center shrink-0">
+              <ReceiptSectionIcon />
+            </span>
+            <span className="font-extrabold text-base">{businessDate}の経費</span>
+          </div>
           <div className="text-sm font-mono text-gray-300">計 ¥{total.toLocaleString()}</div>
         </div>
         {expenses.length === 0 ? (
@@ -290,8 +333,8 @@ export default function ExpensesPage() {
       </div>
 
       {hourlyStaff.length > 0 && (
-        <div>
-          <div className="text-gold font-bold text-sm mb-2">出勤情報（時給スタッフ）</div>
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader icon={<ClockSectionIcon />}>出勤情報（時給スタッフ）</SectionHeader>
           <div className="rounded-xl border border-line bg-elevated p-3 space-y-2 mb-2">
             <select
               value={attStaffId}

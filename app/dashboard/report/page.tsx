@@ -49,6 +49,86 @@ function pctChange(now: number, prev: number): number | null {
   return ((now - prev) / prev) * 100;
 }
 
+type SectionTone = "gold" | "blue";
+
+function SectionHeader({
+  icon,
+  tone = "gold",
+  right,
+  children,
+}: {
+  icon: React.ReactNode;
+  tone?: SectionTone;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const badge = tone === "blue" ? "bg-[#6FB3E0]/12 text-[#6FB3E0]" : "bg-gold/12 text-gold";
+  return (
+    <div className={`flex items-center justify-between gap-2.5 ${right ? "" : "mb-3"}`}>
+      <div className="flex items-center gap-2.5">
+        <span className={`w-8 h-8 rounded-full ${badge} flex items-center justify-center shrink-0`}>{icon}</span>
+        <span className="font-extrabold text-base">{children}</span>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function CalendarSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+    </svg>
+  );
+}
+
+function CashSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M6 6v12M18 6v12" />
+    </svg>
+  );
+}
+
+function PeopleSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <circle cx="18" cy="9" r="2.3" />
+      <path d="M15.3 14.3c2.5.5 4.2 2.5 4.2 5.7" />
+    </svg>
+  );
+}
+
+function LightbulbSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6M10 21h4M8 14a5 5 0 1 1 8 0c-.9 1-1.3 1.6-1.3 2.7H9.3c0-1.1-.4-1.7-1.3-2.7Z" />
+    </svg>
+  );
+}
+
+function ReceiptSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
+  );
+}
+
+function ListSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+
 type LaborRow = {
   staffId: string;
   name: string;
@@ -707,34 +787,39 @@ export default function ReportPage() {
     <div className="space-y-6">
       <DateBar />
       <div className="rounded-2xl bg-gold/10 border border-gold/30 p-3 space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="text-gold font-bold text-sm">📅 {isToday ? "本日" : businessDate}の売上</div>
-        <button
-          onClick={exportExcel}
-          disabled={exporting}
-          className="text-xs rounded-md bg-gold text-bg px-3 py-1.5 font-bold disabled:opacity-50"
+      <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-4">
+        <SectionHeader
+          icon={<CalendarSectionIcon />}
+          right={
+            <button
+              onClick={exportExcel}
+              disabled={exporting}
+              className="text-xs rounded-md bg-gold text-bg px-3 py-1.5 font-bold disabled:opacity-50 shrink-0"
+            >
+              {exporting ? "出力中..." : "Excel出力"}
+            </button>
+          }
         >
-          {exporting ? "出力中..." : "Excel出力"}
-        </button>
+          {isToday ? "本日" : businessDate}の売上
+        </SectionHeader>
+        <div className="grid grid-cols-2 gap-y-1 text-sm font-mono mt-3">
+          <span className="text-gray-400">売上（税込）</span>
+          <span className="text-right">{yen(summary.total)}</span>
+          <span className="text-gray-400">経費</span>
+          <span className="text-right">−{yen(summary.expense)}</span>
+          <span className="text-gray-300 font-bold">売上－経費</span>
+          <span className="text-right text-gold font-bold">{yen(summary.total - summary.expense)}</span>
+          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
+          <span className="text-gray-400 mt-2">現金 / カード / 未会計</span>
+          <span className="text-right mt-2">
+            {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
+          </span>
+        </div>
       </div>
 
-      <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
-        <span className="text-gray-400">売上（税込）</span>
-        <span className="text-right">{yen(summary.total)}</span>
-        <span className="text-gray-400">経費</span>
-        <span className="text-right">−{yen(summary.expense)}</span>
-        <span className="text-gray-300 font-bold">売上－経費</span>
-        <span className="text-right text-gold font-bold">{yen(summary.total - summary.expense)}</span>
-        <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
-        <span className="text-gray-400 mt-2">現金 / カード / 未会計</span>
-        <span className="text-right mt-2">
-          {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
-        </span>
-      </div>
-
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">現金精算</div>
-        <div className="rounded-xl border border-line bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono">
+      <div className="rounded-xl border border-line bg-elevated p-4">
+        <SectionHeader icon={<CashSectionIcon />}>現金精算</SectionHeader>
+        <div className="grid grid-cols-2 gap-y-1 text-sm font-mono">
           <span className="text-gray-400">現金売上</span>
           <span className="text-right">{yen(summary.cash)}</span>
           <span className="text-gray-400">経費（現金支払い分）</span>
@@ -748,11 +833,14 @@ export default function ReportPage() {
         </div>
       </div>
 
-      <div>
-        <div className="flex justify-between items-center mb-2">
-          <div className="text-gold font-bold text-sm">人件費（人別）</div>
-          <div className="text-sm font-mono text-gold font-bold">計 {yen(summary.labor)}</div>
-        </div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader
+          icon={<PeopleSectionIcon />}
+          right={<span className="text-sm font-mono text-gold font-bold">計 {yen(summary.labor)}</span>}
+        >
+          人件費（人別）
+        </SectionHeader>
+        <div className="mt-3">
         {laborRows.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             対象者がいません
@@ -787,6 +875,7 @@ export default function ReportPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
 
       <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-3 flex justify-between items-center text-sm font-mono">
@@ -795,8 +884,8 @@ export default function ReportPage() {
       </div>
 
       {showInsights && insights.length > 0 && (
-        <div>
-          <div className="text-gold font-bold text-sm mb-2">気づき</div>
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader icon={<LightbulbSectionIcon />}>気づき</SectionHeader>
           <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
             {insights.map((ins, i) => (
               <div key={i} className="flex items-start gap-2 px-3 py-2 text-sm">
@@ -813,8 +902,8 @@ export default function ReportPage() {
         </div>
       )}
 
-      <div>
-        <div className="text-gold font-bold text-sm mb-2">伝票別</div>
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<ReceiptSectionIcon />}>伝票別</SectionHeader>
         {tabRows.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
             本日の伝票はまだありません
@@ -857,22 +946,30 @@ export default function ReportPage() {
       </div>
 
       <div className="rounded-2xl bg-[#6FB3E0]/10 border border-[#6FB3E0]/30 p-3 space-y-4">
-        <div className="text-[#6FB3E0] font-bold text-sm mb-2">🗓️ 今月サマリー（{monthLabel}）</div>
-        <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 grid grid-cols-2 gap-y-1 text-sm font-mono mb-2">
-          <span className="text-gray-400">売上（税込）</span>
-          <span className="text-right">{yen(monthTotal.total)}</span>
-          <span className="text-gray-400">経費</span>
-          <span className="text-right">−{yen(monthTotal.expense)}</span>
-          <span className="text-gray-300 font-bold">売上－経費</span>
-          <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total - monthTotal.expense)}</span>
-          <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
+        <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-4">
+          <SectionHeader icon={<CalendarSectionIcon />} tone="blue">
+            今月サマリー（{monthLabel}）
+          </SectionHeader>
+          <div className="grid grid-cols-2 gap-y-1 text-sm font-mono mt-3">
+            <span className="text-gray-400">売上（税込）</span>
+            <span className="text-right">{yen(monthTotal.total)}</span>
+            <span className="text-gray-400">経費</span>
+            <span className="text-right">−{yen(monthTotal.expense)}</span>
+            <span className="text-gray-300 font-bold">売上－経費</span>
+            <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total - monthTotal.expense)}</span>
+            <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
+          </div>
         </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-[#6FB3E0] font-bold text-sm">人件費（人別・今月）</div>
-            <div className="text-sm font-mono text-[#6FB3E0] font-bold">計 {yen(monthTotal.labor)}</div>
-          </div>
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader
+            icon={<PeopleSectionIcon />}
+            tone="blue"
+            right={<span className="text-sm font-mono text-[#6FB3E0] font-bold">計 {yen(monthTotal.labor)}</span>}
+          >
+            人件費（人別・今月）
+          </SectionHeader>
+          <div className="mt-3">
           {monthLaborRows.length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
               対象者がいません
@@ -907,6 +1004,7 @@ export default function ReportPage() {
               ))}
             </div>
           )}
+          </div>
         </div>
 
         <div className="rounded-xl border border-line border-l-4 border-l-[#6FB3E0] bg-elevated p-3 flex justify-between items-center text-sm font-mono">
@@ -1015,22 +1113,25 @@ export default function ReportPage() {
           </div>
         )}
 
-        {monthRows.length === 0 ? (
-          <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
-            今月の記録はまだありません
-          </div>
-        ) : (
-          <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
-            {monthRows.map((r) => (
-              <div key={r.date} className="flex justify-between items-center px-3 py-2 text-sm">
-                <span className="text-gray-300">{r.date}</span>
-                <span className="font-mono text-gray-400">
-                  {yen(r.total)}（粗利 {yen(r.profit)}）
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader icon={<ListSectionIcon />} tone="blue">日別</SectionHeader>
+          {monthRows.length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+              今月の記録はまだありません
+            </div>
+          ) : (
+            <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+              {monthRows.map((r) => (
+                <div key={r.date} className="flex justify-between items-center px-3 py-2 text-sm">
+                  <span className="text-gray-300">{r.date}</span>
+                  <span className="font-mono text-gray-400">
+                    {yen(r.total)}（粗利 {yen(r.profit)}）
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <button
