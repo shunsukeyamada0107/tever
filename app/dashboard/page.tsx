@@ -176,6 +176,8 @@ function POSPageInner() {
   const [modalGuestCount, setModalGuestCount] = useState("");
   const [modalStaffId, setModalStaffId] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState("");
+  const [editingTabName, setEditingTabName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
   const [manualDiscount, setManualDiscount] = useState("");
@@ -360,6 +362,7 @@ function POSPageInner() {
   // 別の伝票に切り替えたら、直前の「元に戻す」は文脈が変わるので消す
   useEffect(() => {
     setLastAction(null);
+    setEditingTabName(false);
     if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
   }, [activeTabId]);
 
@@ -482,6 +485,13 @@ function POSPageInner() {
       }
       loadData();
     });
+  }
+
+  async function renameTab() {
+    if (!activeTab || !nameDraft.trim()) return;
+    await supabase.from("tabs").update({ name: nameDraft.trim() }).eq("id", activeTab.id);
+    setEditingTabName(false);
+    loadData();
   }
 
   async function saveGuestCount(count: string) {
@@ -996,20 +1006,60 @@ function POSPageInner() {
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
             className="rounded-xl border border-line bg-elevated p-4 space-y-3"
           >
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">{activeTab.name}</span>
-                <span
-                  className={`text-xs rounded-full px-2 py-0.5 font-bold ${
-                    activeTab.closed_at ? "bg-line text-gray-300" : "bg-gold/20 text-gold"
-                  }`}
-                >
-                  {activeTab.closed_at ? "会計済み" : "対応中"}
-                </span>
-              </div>
-              <button onClick={deleteTab} className="text-xs text-rose">
-                伝票を削除
-              </button>
+            <div className="flex justify-between items-center gap-2">
+              {editingTabName ? (
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <input
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") renameTab();
+                      if (e.key === "Escape") setEditingTabName(false);
+                    }}
+                    autoFocus
+                    className="flex-1 min-w-0 rounded-md bg-bg2 border border-gold px-2 py-1 text-base font-bold"
+                  />
+                  <button
+                    onClick={renameTab}
+                    disabled={!nameDraft.trim()}
+                    className="text-gold text-sm font-bold shrink-0 disabled:opacity-40"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => setEditingTabName(false)}
+                    className="text-xs text-gray-400 shrink-0"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-bold text-lg truncate">{activeTab.name}</span>
+                  <button
+                    onClick={() => {
+                      setNameDraft(activeTab.name);
+                      setEditingTabName(true);
+                    }}
+                    className="text-gray-400 shrink-0"
+                    aria-label="伝票名を編集"
+                  >
+                    ✏️
+                  </button>
+                  <span
+                    className={`text-xs rounded-full px-2 py-0.5 font-bold shrink-0 ${
+                      activeTab.closed_at ? "bg-line text-gray-300" : "bg-gold/20 text-gold"
+                    }`}
+                  >
+                    {activeTab.closed_at ? "会計済み" : "対応中"}
+                  </span>
+                </div>
+              )}
+              {!editingTabName && (
+                <button onClick={deleteTab} className="text-xs text-rose shrink-0">
+                  伝票を削除
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-3 text-xs text-gray-400">
