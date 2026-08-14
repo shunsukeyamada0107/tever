@@ -130,12 +130,6 @@ const LP_STYLES = `
     align-items: center;
     gap: 16px;
   }
-  .lp .login-link {
-    font-size: 13px;
-    color: var(--text-mute);
-    text-decoration: none;
-  }
-  .lp .login-link:hover { color: var(--blue); }
   .lp .btn {
     display: inline-flex;
     align-items: center;
@@ -597,11 +591,8 @@ export default function LandingPage() {
             <a href="#flow">導入の流れ</a>
           </nav>
           <div className="nav-cta">
-            <a className="login-link" href="/login">
+            <a className="btn btn-primary" href="/login">
               ログイン
-            </a>
-            <a className="btn btn-primary" href="#contact">
-              相談する
             </a>
           </div>
         </div>
