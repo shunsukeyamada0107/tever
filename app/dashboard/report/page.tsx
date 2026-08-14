@@ -156,6 +156,30 @@ function genderTotals(rows: TabWithItems[]): GenderTotals {
   return { male, female, trackedTabs, totalTabs: rows.length };
 }
 
+type CustomerGroup = { name: string; visits: number; total: number; avg: number; firstVisit: string; lastVisit: string };
+
+// 検索結果（あいまい検索でヒットした伝票）を名前ごとにまとめ、来店回数・累計/平均額・初回/最終来店日を出す
+function groupCustomerResults(rows: TabWithItems[], taxRate: number): CustomerGroup[] {
+  const byName = new Map<string, CustomerGroup>();
+  rows.forEach((t) => {
+    const key = t.name.trim();
+    if (!key) return;
+    const amount = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+    const existing = byName.get(key);
+    if (existing) {
+      existing.visits += 1;
+      existing.total += amount;
+      if (t.created_at < existing.firstVisit) existing.firstVisit = t.created_at;
+      if (t.created_at > existing.lastVisit) existing.lastVisit = t.created_at;
+    } else {
+      byName.set(key, { name: key, visits: 1, total: amount, avg: 0, firstVisit: t.created_at, lastVisit: t.created_at });
+    }
+  });
+  return Array.from(byName.values())
+    .map((g) => ({ ...g, avg: g.total / g.visits }))
+    .sort((a, b) => b.visits - a.visits || b.total - a.total);
+}
+
 const GENDER_COLOR_MALE = "#5B9EF3";
 const GENDER_COLOR_FEMALE = "#E579A3";
 
@@ -313,6 +337,15 @@ function GenderSectionIcon() {
   );
 }
 
+function SearchSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
 type LaborRow = {
   staffId: string;
   name: string;
@@ -390,6 +423,10 @@ export default function ReportPage() {
   const [showCostChart, setShowCostChart] = useState(false);
   const [selectedCostDate, setSelectedCostDate] = useState<string | null>(null);
   const [prevMonthSummary, setPrevMonthSummary] = useState<DaySummary | null>(null);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerResults, setCustomerResults] = useState<TabWithItems[]>([]);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -537,6 +574,31 @@ export default function ReportPage() {
     loadData();
   }, [loadData]);
 
+  // 顧客検索：名前のあいまい検索で、日付を問わず全期間の伝票から探す（デバウンス付き）
+  useEffect(() => {
+    setExpandedCustomer(null);
+    if (!storeId || !customerQuery.trim()) {
+      setCustomerResults([]);
+      setSearchingCustomer(false);
+      return;
+    }
+    const query = customerQuery.trim();
+    setSearchingCustomer(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("tabs")
+        .select("*, tab_items(*)")
+        .eq("store_id", storeId)
+        .ilike("name", `%${query}%`)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      setCustomerResults((data as TabWithItems[]) ?? []);
+      setSearchingCustomer(false);
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerQuery, storeId]);
+
   function staffName(staffId: string | null) {
     if (!staffId) return "未設定";
     const s = staff.find((x) => x.id === staffId);
@@ -643,6 +705,7 @@ export default function ReportPage() {
   const heatmapGrid = buildHeatmap(monthTabsRaw);
   const heatmapMax = Math.max(1, ...heatmapGrid.flat());
   const repeatCustomers = buildRepeatCustomers(monthTabsRaw, taxRate);
+  const customerGroups = groupCustomerResults(customerResults, taxRate);
   const todayGender = genderTotals(tabs);
   const monthGender = genderTotals(monthTabsRaw);
 
@@ -978,6 +1041,88 @@ export default function ReportPage() {
   return (
     <div className="space-y-6">
       <DateBar />
+
+      <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<SearchSectionIcon />}>顧客検索</SectionHeader>
+        <input
+          value={customerQuery}
+          onChange={(e) => setCustomerQuery(e.target.value)}
+          placeholder="お客様の名前で検索（全期間の来店履歴）"
+          className="w-full rounded-md bg-bg2 border border-line px-3 py-2 text-sm mb-2"
+        />
+        {!customerQuery.trim() ? (
+          <div className="text-xs text-gray-500 text-center py-4">
+            名前を入力すると、日付を問わず全期間の来店履歴から検索します
+          </div>
+        ) : searchingCustomer ? (
+          <div className="text-xs text-gray-500 text-center py-4">検索中...</div>
+        ) : customerGroups.length === 0 ? (
+          <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+            該当するお客様が見つかりません
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {customerGroups.map((g) => {
+              const expanded = expandedCustomer === g.name;
+              const visits = customerResults
+                .filter((t) => t.name.trim() === g.name)
+                .sort((a, b) => b.created_at.localeCompare(a.created_at));
+              return (
+                <div key={g.name} className="rounded-xl border border-line bg-elevated p-3">
+                  <button
+                    onClick={() => setExpandedCustomer(expanded ? null : g.name)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="font-bold text-gray-200 truncate">{g.name}</span>
+                      <span className="text-xs text-gold font-bold shrink-0">{g.visits}回来店</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 font-mono">
+                      累計 {yen(g.total)} ・ 平均 {yen(g.avg)}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      初回 {new Date(g.firstVisit).toLocaleDateString("ja-JP")} ・ 最終{" "}
+                      {new Date(g.lastVisit).toLocaleDateString("ja-JP")}
+                    </div>
+                    <div className="text-xs text-gold mt-1.5">{expanded ? "▲ 過去の伝票を閉じる" : "▼ 過去の伝票を見る"}</div>
+                  </button>
+                  {expanded && (
+                    <div className="mt-2 pt-2 border-t border-dashed border-line space-y-1.5">
+                      {visits.map((t) => (
+                        <div key={t.id} className="text-xs bg-bg2 rounded-md px-2 py-1.5">
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="text-gray-300 font-bold shrink-0">
+                              {new Date(t.created_at).toLocaleDateString("ja-JP", {
+                                year: "numeric",
+                                month: "numeric",
+                                day: "numeric",
+                                weekday: "short",
+                              })}
+                              {t.closed_at && ` ・${PAYMENT_METHOD_EMOJI[t.payment_method ?? "cash"]}`}
+                            </span>
+                            <span className="font-mono text-gray-300 shrink-0">
+                              {yen(tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount))}
+                            </span>
+                          </div>
+                          <div className="text-gray-500 mt-0.5 truncate">
+                            {t.tab_items.length > 0 ? t.tab_items.map((i) => i.name).join("・") : "品目なし"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {customerResults.length >= 300 && (
+              <div className="text-xs text-gray-500 text-center pt-1">
+                直近300件のみ表示しています。絞り込むとより正確に集計されます
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="rounded-2xl bg-gold/10 border border-gold/30 p-3 space-y-4">
       <div className="rounded-xl border border-line border-l-4 border-l-gold bg-elevated p-4">
         <SectionHeader
