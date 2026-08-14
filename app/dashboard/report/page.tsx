@@ -49,6 +49,125 @@ function pctChange(now: number, prev: number): number | null {
   return ((now - prev) / prev) * 100;
 }
 
+// 平均滞在時間：会計済みの伝票のみ対象（来店〜退店の実測時間）
+function avgStayMinutes(rows: TabWithItems[]): number | null {
+  const durations = rows
+    .filter((t) => t.closed_at)
+    .map((t) => (new Date(t.closed_at!).getTime() - new Date(t.created_at).getTime()) / 60000)
+    .filter((m) => m >= 0);
+  if (durations.length === 0) return null;
+  return durations.reduce((a, b) => a + b, 0) / durations.length;
+}
+
+function formatMinutes(mins: number): string {
+  const total = Math.round(mins);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}時間${m}分` : `${m}分`;
+}
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const HOUR_BUCKETS: [number, number][] = [
+  [0, 3],
+  [3, 6],
+  [6, 9],
+  [9, 12],
+  [12, 15],
+  [15, 18],
+  [18, 21],
+  [21, 24],
+];
+const HOUR_BUCKET_LABELS = HOUR_BUCKETS.map(([s, e]) => `${s}-${e}`);
+
+// 曜日×時間帯の来店（伝票作成）件数。曜日は営業日（business_date）基準、時間帯は実際の時刻ベース
+function buildHeatmap(rows: TabWithItems[]): number[][] {
+  const grid: number[][] = Array.from({ length: 7 }, () => Array(HOUR_BUCKETS.length).fill(0));
+  rows.forEach((t) => {
+    const weekday = new Date(`${t.business_date}T12:00:00`).getDay();
+    const hour = new Date(t.created_at).getHours();
+    const bucketIndex = HOUR_BUCKETS.findIndex(([start, end]) => hour >= start && hour < end);
+    if (bucketIndex >= 0) grid[weekday][bucketIndex] += 1;
+  });
+  return grid;
+}
+
+type RepeatCustomerRow = { name: string; visits: number; total: number; lastVisit: string };
+
+// 伝票名の完全一致で来店回数・累計売上を集計し、2回以上来店した名前だけを返す
+function buildRepeatCustomers(rows: TabWithItems[], taxRate: number): RepeatCustomerRow[] {
+  const byName = new Map<string, RepeatCustomerRow>();
+  rows.forEach((t) => {
+    const key = t.name.trim();
+    if (!key) return;
+    const amount = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
+    const existing = byName.get(key);
+    if (existing) {
+      existing.visits += 1;
+      existing.total += amount;
+      if (t.created_at > existing.lastVisit) existing.lastVisit = t.created_at;
+    } else {
+      byName.set(key, { name: key, visits: 1, total: amount, lastVisit: t.created_at });
+    }
+  });
+  return Array.from(byName.values())
+    .filter((r) => r.visits >= 2)
+    .sort((a, b) => b.visits - a.visits || b.total - a.total);
+}
+
+type GenderTotals = { male: number; female: number; trackedTabs: number; totalTabs: number };
+
+// 男女の内訳が入力された伝票だけを対象に集計（未入力の伝票は集計対象外）
+function genderTotals(rows: TabWithItems[]): GenderTotals {
+  let male = 0;
+  let female = 0;
+  let trackedTabs = 0;
+  rows.forEach((t) => {
+    if (t.guest_count_male != null || t.guest_count_female != null) {
+      male += t.guest_count_male ?? 0;
+      female += t.guest_count_female ?? 0;
+      trackedTabs += 1;
+    }
+  });
+  return { male, female, trackedTabs, totalTabs: rows.length };
+}
+
+const GENDER_COLOR_MALE = "#5B9EF3";
+const GENDER_COLOR_FEMALE = "#E579A3";
+
+function GenderRatioBar({ gender }: { gender: GenderTotals }) {
+  const total = gender.male + gender.female;
+  if (total === 0) {
+    return (
+      <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+        男女の内訳が入力された伝票がまだありません（新規伝票を作る時に「内訳・男女」欄へ入力すると集計されます）
+      </div>
+    );
+  }
+  const malePct = (gender.male / total) * 100;
+  const femalePct = (gender.female / total) * 100;
+  return (
+    <>
+      <div className="flex w-full h-3 rounded-full overflow-hidden bg-bg2">
+        <div style={{ width: `${malePct}%`, backgroundColor: GENDER_COLOR_MALE }} />
+        <div style={{ width: `${femalePct}%`, backgroundColor: GENDER_COLOR_FEMALE }} />
+      </div>
+      <div className="flex justify-between text-xs text-gray-400 mt-2">
+        <span>
+          <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: GENDER_COLOR_MALE }} />
+          男性 {gender.male}名（{Math.round(malePct)}%）
+        </span>
+        <span>
+          女性 {gender.female}名（{Math.round(femalePct)}%）
+          <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ backgroundColor: GENDER_COLOR_FEMALE }} />
+        </span>
+      </div>
+      <div className="text-xs text-gray-500 mt-2">
+        内訳を入力した伝票 {gender.trackedTabs}/{gender.totalTabs}件
+      </div>
+    </>
+  );
+}
+
 type SectionTone = "gold" | "blue";
 
 function SectionHeader({
@@ -125,6 +244,46 @@ function ListSectionIcon() {
   return (
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+
+function ClockSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
+function GridSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+function RepeatSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 2.1 21 6l-4 3.9" />
+      <path d="M3 12.5a9 9 0 0 1 15-6.7l3 3.2" />
+      <path d="M7 21.9 3 18l4-3.9" />
+      <path d="M21 11.5a9 9 0 0 1-15 6.7l-3-3.2" />
+    </svg>
+  );
+}
+
+function GenderSectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="15" r="5" />
+      <path d="M16.5 3h4.5v4.5M20.5 3.5 14 10" />
     </svg>
   );
 }
@@ -453,6 +612,14 @@ export default function ReportPage() {
   );
   const monthHourlyLabor = hourlyLaborBreakdown(monthAttRaw, staffName);
   const monthLaborRows = buildLaborRows(monthHourlyLabor, monthCommission, staff);
+
+  const todayAvgStay = avgStayMinutes(tabs);
+  const monthAvgStay = avgStayMinutes(monthTabsRaw);
+  const heatmapGrid = buildHeatmap(monthTabsRaw);
+  const heatmapMax = Math.max(1, ...heatmapGrid.flat());
+  const repeatCustomers = buildRepeatCustomers(monthTabsRaw, taxRate);
+  const todayGender = genderTotals(tabs);
+  const monthGender = genderTotals(monthTabsRaw);
 
   // 月間売上グラフ用：その月の1日〜末日まで欠けなく並べる（記録が無い日は0）
   function buildChartSeries(): ChartPoint[] {
@@ -814,6 +981,8 @@ export default function ReportPage() {
           <span className="text-right mt-2">
             {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
           </span>
+          <span className="text-gray-400">平均滞在時間</span>
+          <span className="text-right">{todayAvgStay != null ? formatMinutes(todayAvgStay) : "—"}</span>
         </div>
       </div>
 
@@ -903,6 +1072,11 @@ export default function ReportPage() {
       )}
 
       <div className="rounded-xl border border-line p-4">
+        <SectionHeader icon={<GenderSectionIcon />}>男女比率（本日）</SectionHeader>
+        <GenderRatioBar gender={todayGender} />
+      </div>
+
+      <div className="rounded-xl border border-line p-4">
         <SectionHeader icon={<ReceiptSectionIcon />}>伝票別</SectionHeader>
         {tabRows.length === 0 ? (
           <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
@@ -958,6 +1132,8 @@ export default function ReportPage() {
             <span className="text-gray-300 font-bold">売上－経費</span>
             <span className="text-right text-[#6FB3E0] font-bold">{yen(monthTotal.total - monthTotal.expense)}</span>
             <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(monthTotal.tax)}）</span>
+            <span className="text-gray-400 mt-2">平均滞在時間</span>
+            <span className="text-right mt-2">{monthAvgStay != null ? formatMinutes(monthAvgStay) : "—"}</span>
           </div>
         </div>
 
@@ -1131,6 +1307,80 @@ export default function ReportPage() {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader icon={<GridSectionIcon />} tone="blue">混雑ヒートマップ（今月・来店時刻）</SectionHeader>
+          <div className="overflow-x-auto">
+            <div className="min-w-[420px]">
+              <div className="grid grid-cols-[1.6rem_repeat(8,1fr)] gap-1 mb-1">
+                <div />
+                {HOUR_BUCKET_LABELS.map((label) => (
+                  <div key={label} className="text-[9px] text-gray-500 text-center">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              {WEEKDAY_LABELS.map((wd, wi) => (
+                <div key={wd} className="grid grid-cols-[1.6rem_repeat(8,1fr)] gap-1 mb-1 items-center">
+                  <div className="text-xs text-gray-400">{wd}</div>
+                  {heatmapGrid[wi].map((count, hi) => {
+                    const intensity = count / heatmapMax;
+                    return (
+                      <div
+                        key={hi}
+                        title={`${WEEKDAY_LABELS[wi]}曜 ${HOUR_BUCKET_LABELS[hi]}時 ・ ${count}件`}
+                        className="aspect-square rounded-sm flex items-center justify-center text-[9px] font-mono"
+                        style={{
+                          backgroundColor: `rgba(111, 179, 224, ${0.1 + intensity * 0.75})`,
+                          color: intensity > 0.55 ? "#0B1220" : "#9CA3AF",
+                        }}
+                      >
+                        {count > 0 ? count : ""}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            色が濃いほど来店（伝票作成）が多い時間帯です。今月の営業日ベースで集計しています
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader
+            icon={<RepeatSectionIcon />}
+            tone="blue"
+            right={<span className="text-sm font-mono text-[#6FB3E0] font-bold">{repeatCustomers.length}名</span>}
+          >
+            リピーター分析（今月）
+          </SectionHeader>
+          {repeatCustomers.length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
+              今月まだ2回以上来店した名前はありません
+            </div>
+          ) : (
+            <div className="rounded-xl border border-line bg-elevated divide-y divide-line">
+              {repeatCustomers.slice(0, 10).map((r) => (
+                <div key={r.name} className="flex justify-between items-center px-3 py-2 text-sm">
+                  <span className="text-gray-300 truncate">{r.name}</span>
+                  <span className="font-mono text-gray-400 shrink-0">
+                    {r.visits}回 ・ 計{yen(r.total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="text-xs text-gray-500 mt-2">
+            伝票名の完全一致で集計しています（同じ方でも表記ゆれがあると別カウントになります）
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line p-4">
+          <SectionHeader icon={<GenderSectionIcon />} tone="blue">男女比率（今月）</SectionHeader>
+          <GenderRatioBar gender={monthGender} />
         </div>
       </div>
 

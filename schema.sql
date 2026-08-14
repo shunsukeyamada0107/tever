@@ -112,6 +112,8 @@ create table tabs (
   memo            text not null default '',
   payment_method  text check (payment_method in ('cash','card','paypay','other_epayment')),
   guest_count     integer,                             -- 人数（任意）
+  guest_count_male   integer,                          -- 内訳・男性人数（任意。集計タブの男女比率に反映）
+  guest_count_female integer,                          -- 内訳・女性人数（任意）
   course_ends_at  timestamptz,                          -- 飲み放題等コースの終了予定時刻（任意）
   discount_percent numeric,                             -- 割引率（例: 30 = 30%OFF、任意）
   discount_amount  numeric,                             -- 自由入力の値引き額（円、任意）

@@ -174,6 +174,8 @@ function POSPageInner() {
   const [nameSearchResults, setNameSearchResults] = useState<TabWithItems[]>([]);
   const [searchingName, setSearchingName] = useState(false);
   const [modalGuestCount, setModalGuestCount] = useState("");
+  const [modalGuestMale, setModalGuestMale] = useState("");
+  const [modalGuestFemale, setModalGuestFemale] = useState("");
   const [modalStaffId, setModalStaffId] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState("");
   const [editingTabName, setEditingTabName] = useState(false);
@@ -188,6 +190,8 @@ function POSPageInner() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<{ tabId: string; label: string; run: () => void } | null>(null);
   const lastActionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guestMaleInputRef = useRef<HTMLInputElement>(null);
+  const guestFemaleInputRef = useRef<HTMLInputElement>(null);
 
   function pushUndo(tabId: string, label: string, run: () => void) {
     if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
@@ -374,6 +378,8 @@ function POSPageInner() {
   function openCreateModal() {
     setModalName("");
     setModalGuestCount("");
+    setModalGuestMale("");
+    setModalGuestFemale("");
     setModalStaffId(null);
     setShowCreateModal(true);
   }
@@ -411,6 +417,8 @@ function POSPageInner() {
         business_date: businessDate,
         name: modalName.trim(),
         guest_count: modalGuestCount.trim() === "" ? null : Number(modalGuestCount),
+        guest_count_male: modalGuestMale.trim() === "" ? null : Number(modalGuestMale),
+        guest_count_female: modalGuestFemale.trim() === "" ? null : Number(modalGuestFemale),
         staff_id: modalStaffId,
       })
       .select()
@@ -499,6 +507,18 @@ function POSPageInner() {
     await supabase
       .from("tabs")
       .update({ guest_count: count.trim() === "" ? null : Number(count) })
+      .eq("id", activeTab.id);
+    loadData();
+  }
+
+  async function saveGuestBreakdown(male: string, female: string) {
+    if (!activeTab) return;
+    await supabase
+      .from("tabs")
+      .update({
+        guest_count_male: male.trim() === "" ? null : Number(male),
+        guest_count_female: female.trim() === "" ? null : Number(female),
+      })
       .eq("id", activeTab.id);
     loadData();
   }
@@ -1076,6 +1096,35 @@ function POSPageInner() {
                     inputMode="numeric"
                     placeholder="-"
                     className="w-12 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs text-center"
+                  />
+                  名
+                </span>
+              )}
+              {!activeTab.closed_at && (
+                <span className="flex items-center gap-1">
+                  内訳
+                  <input
+                    key={`male-${activeTab.id}-${activeTab.guest_count_male}`}
+                    ref={guestMaleInputRef}
+                    defaultValue={activeTab.guest_count_male ?? ""}
+                    onBlur={() =>
+                      saveGuestBreakdown(guestMaleInputRef.current?.value ?? "", guestFemaleInputRef.current?.value ?? "")
+                    }
+                    inputMode="numeric"
+                    placeholder="男"
+                    className="w-10 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs text-center"
+                  />
+                  ／
+                  <input
+                    key={`female-${activeTab.id}-${activeTab.guest_count_female}`}
+                    ref={guestFemaleInputRef}
+                    defaultValue={activeTab.guest_count_female ?? ""}
+                    onBlur={() =>
+                      saveGuestBreakdown(guestMaleInputRef.current?.value ?? "", guestFemaleInputRef.current?.value ?? "")
+                    }
+                    inputMode="numeric"
+                    placeholder="女"
+                    className="w-10 rounded-md bg-bg2 border border-line px-1.5 py-0.5 text-xs text-center"
                   />
                   名
                 </span>
@@ -1668,6 +1717,28 @@ function POSPageInner() {
                 placeholder="例：4"
                 className="w-24 rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">内訳・男女（任意・集計の男女比率に反映）</label>
+              <div className="flex items-center gap-2">
+                <input
+                  value={modalGuestMale}
+                  onChange={(e) => setModalGuestMale(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="男性"
+                  className="w-20 rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+                />
+                <span className="text-xs text-gray-500">名 ／</span>
+                <input
+                  value={modalGuestFemale}
+                  onChange={(e) => setModalGuestFemale(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="女性"
+                  className="w-20 rounded-md bg-bg2 border border-line px-3 py-2 text-sm"
+                />
+                <span className="text-xs text-gray-500">名</span>
+              </div>
             </div>
 
             {staff.length > 0 && (

@@ -58,6 +58,8 @@ export type Tab = {
   memo: string;
   payment_method: PaymentMethod | null;
   guest_count: number | null;
+  guest_count_male: number | null;
+  guest_count_female: number | null;
   course_ends_at: string | null;
   discount_percent: number | null;
   discount_amount: number | null;

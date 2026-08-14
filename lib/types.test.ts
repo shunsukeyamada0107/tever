@@ -45,6 +45,8 @@ function tab(overrides: Partial<TabWithItems> = {}): TabWithItems {
     memo: "",
     payment_method: "cash",
     guest_count: null,
+    guest_count_male: null,
+    guest_count_female: null,
     course_ends_at: null,
     discount_percent: null,
     discount_amount: null,
