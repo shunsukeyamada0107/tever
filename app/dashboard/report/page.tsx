@@ -163,8 +163,8 @@ function GenderRatioBar({ gender }: { gender: GenderTotals }) {
   const total = gender.male + gender.female;
   if (total === 0) {
     return (
-      <div className="text-sm text-gray-500 text-center py-6 border border-dashed border-line rounded-xl">
-        男女の内訳が入力された伝票がまだありません（新規伝票を作る時に「内訳・男女」欄へ入力すると集計されます）
+      <div className="text-xs text-gray-500 text-center py-3 border border-dashed border-line rounded-lg">
+        男女の内訳が入力された伝票がまだありません
       </div>
     );
   }
@@ -172,22 +172,22 @@ function GenderRatioBar({ gender }: { gender: GenderTotals }) {
   const femalePct = (gender.female / total) * 100;
   return (
     <>
-      <div className="flex w-full h-3 rounded-full overflow-hidden bg-bg2">
+      <div className="flex w-full h-1.5 rounded-full overflow-hidden bg-bg2">
         <div style={{ width: `${malePct}%`, backgroundColor: GENDER_COLOR_MALE }} />
         <div style={{ width: `${femalePct}%`, backgroundColor: GENDER_COLOR_FEMALE }} />
       </div>
-      <div className="flex justify-between text-xs text-gray-400 mt-2">
+      <div className="flex justify-between text-[11px] text-gray-400 mt-1.5">
         <span>
-          <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: GENDER_COLOR_MALE }} />
+          <span className="inline-block w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: GENDER_COLOR_MALE }} />
           男性 {gender.male}名（{Math.round(malePct)}%）
         </span>
         <span>
           女性 {gender.female}名（{Math.round(femalePct)}%）
-          <span className="inline-block w-2 h-2 rounded-full ml-1" style={{ backgroundColor: GENDER_COLOR_FEMALE }} />
+          <span className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ backgroundColor: GENDER_COLOR_FEMALE }} />
         </span>
       </div>
-      <div className="text-xs text-gray-500 mt-2">
-        内訳を入力した伝票 {gender.trackedTabs}/{gender.totalTabs}件
+      <div className="text-[11px] text-gray-500 mt-1">
+        入力済 {gender.trackedTabs}/{gender.totalTabs}件
       </div>
     </>
   );
@@ -670,7 +670,6 @@ export default function ReportPage() {
   const monthAvgStay = avgStayMinutes(monthTabsRaw);
   const repeatCustomers = buildRepeatCustomers(monthTabsRaw, taxRate);
   const customerGroups = groupCustomerResults(customerResults, taxRate);
-  const todayGender = genderTotals(tabs);
   const monthGender = genderTotals(monthTabsRaw);
 
   // 月間売上グラフ用：その月の1日〜末日まで欠けなく並べる（記録が無い日は0）
@@ -1210,11 +1209,6 @@ export default function ReportPage() {
           </div>
         </div>
       )}
-
-      <div className="rounded-xl border border-line p-4">
-        <SectionHeader icon={<GenderSectionIcon />}>男女比率（本日）</SectionHeader>
-        <GenderRatioBar gender={todayGender} />
-      </div>
 
       <div className="rounded-xl border border-line p-4">
         <SectionHeader icon={<ReceiptSectionIcon />}>伝票別</SectionHeader>
