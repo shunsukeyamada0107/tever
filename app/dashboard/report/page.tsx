@@ -67,31 +67,6 @@ function formatMinutes(mins: number): string {
   return h > 0 ? `${h}時間${m}分` : `${m}分`;
 }
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-const HOUR_BUCKETS: [number, number][] = [
-  [0, 3],
-  [3, 6],
-  [6, 9],
-  [9, 12],
-  [12, 15],
-  [15, 18],
-  [18, 21],
-  [21, 24],
-];
-const HOUR_BUCKET_LABELS = HOUR_BUCKETS.map(([s, e]) => `${s}-${e}`);
-
-// 曜日×時間帯の来店（伝票作成）件数。曜日は営業日（business_date）基準、時間帯は実際の時刻ベース
-function buildHeatmap(rows: TabWithItems[]): number[][] {
-  const grid: number[][] = Array.from({ length: 7 }, () => Array(HOUR_BUCKETS.length).fill(0));
-  rows.forEach((t) => {
-    const weekday = new Date(`${t.business_date}T12:00:00`).getDay();
-    const hour = new Date(t.created_at).getHours();
-    const bucketIndex = HOUR_BUCKETS.findIndex(([start, end]) => hour >= start && hour < end);
-    if (bucketIndex >= 0) grid[weekday][bucketIndex] += 1;
-  });
-  return grid;
-}
-
 type RepeatCustomerRow = { name: string; visits: number; total: number; lastVisit: string };
 
 const REPEAT_NAME_SIMILARITY_THRESHOLD = 0.8;
@@ -303,17 +278,6 @@ function ClockSectionIcon() {
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 3" />
-    </svg>
-  );
-}
-
-function GridSectionIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
     </svg>
   );
 }
@@ -704,8 +668,6 @@ export default function ReportPage() {
 
   const todayAvgStay = avgStayMinutes(tabs);
   const monthAvgStay = avgStayMinutes(monthTabsRaw);
-  const heatmapGrid = buildHeatmap(monthTabsRaw);
-  const heatmapMax = Math.max(1, ...heatmapGrid.flat());
   const repeatCustomers = buildRepeatCustomers(monthTabsRaw, taxRate);
   const customerGroups = groupCustomerResults(customerResults, taxRate);
   const todayGender = genderTotals(tabs);
@@ -1483,46 +1445,6 @@ export default function ReportPage() {
               ))}
             </div>
           )}
-        </div>
-
-        <div className="rounded-xl border border-line p-4">
-          <SectionHeader icon={<GridSectionIcon />} tone="blue">混雑ヒートマップ（今月・来店時刻）</SectionHeader>
-          <div className="overflow-x-auto">
-            <div className="min-w-[420px]">
-              <div className="grid grid-cols-[1.6rem_repeat(8,1fr)] gap-1 mb-1">
-                <div />
-                {HOUR_BUCKET_LABELS.map((label) => (
-                  <div key={label} className="text-[9px] text-gray-500 text-center">
-                    {label}
-                  </div>
-                ))}
-              </div>
-              {WEEKDAY_LABELS.map((wd, wi) => (
-                <div key={wd} className="grid grid-cols-[1.6rem_repeat(8,1fr)] gap-1 mb-1 items-center">
-                  <div className="text-xs text-gray-400">{wd}</div>
-                  {heatmapGrid[wi].map((count, hi) => {
-                    const intensity = count / heatmapMax;
-                    return (
-                      <div
-                        key={hi}
-                        title={`${WEEKDAY_LABELS[wi]}曜 ${HOUR_BUCKET_LABELS[hi]}時 ・ ${count}件`}
-                        className="aspect-square rounded-sm flex items-center justify-center text-[9px] font-mono"
-                        style={{
-                          backgroundColor: `rgba(111, 179, 224, ${0.1 + intensity * 0.75})`,
-                          color: intensity > 0.55 ? "#0B1220" : "#9CA3AF",
-                        }}
-                      >
-                        {count > 0 ? count : ""}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="text-xs text-gray-500 mt-2">
-            色が濃いほど来店（伝票作成）が多い時間帯です。今月の営業日ベースで集計しています
-          </div>
         </div>
 
         <div className="rounded-xl border border-line p-4">
