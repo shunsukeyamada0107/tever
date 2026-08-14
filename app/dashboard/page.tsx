@@ -117,6 +117,17 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// <input type="datetime-local"> はタイムゾーン無しの「YYYY-MM-DDTHH:mm」（ローカル時刻）を要求する
+function toDatetimeLocalValue(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function CourseTimerBadge({ endsAt, now }: { endsAt: string; now: number }) {
   const remaining = new Date(endsAt).getTime() - now;
   if (remaining <= 0) {
@@ -180,6 +191,10 @@ function POSPageInner() {
   const [memoDraft, setMemoDraft] = useState("");
   const [editingTabName, setEditingTabName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [editingTimes, setEditingTimes] = useState(false);
+  const [createdAtDraft, setCreatedAtDraft] = useState("");
+  const [closedAtDraft, setClosedAtDraft] = useState("");
+  const [timesError, setTimesError] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
   const [manualDiscount, setManualDiscount] = useState("");
@@ -367,6 +382,7 @@ function POSPageInner() {
   useEffect(() => {
     setLastAction(null);
     setEditingTabName(false);
+    setEditingTimes(false);
     if (lastActionTimeoutRef.current) clearTimeout(lastActionTimeoutRef.current);
   }, [activeTabId]);
 
@@ -499,6 +515,75 @@ function POSPageInner() {
     if (!activeTab || !nameDraft.trim()) return;
     await supabase.from("tabs").update({ name: nameDraft.trim() }).eq("id", activeTab.id);
     setEditingTabName(false);
+    loadData();
+  }
+
+  function openTimeEditor() {
+    if (!activeTab) return;
+    setCreatedAtDraft(toDatetimeLocalValue(activeTab.created_at));
+    setClosedAtDraft(activeTab.closed_at ? toDatetimeLocalValue(activeTab.closed_at) : "");
+    setTimesError(null);
+    setEditingTimes(true);
+  }
+
+  // 来店・退店時刻を手動で修正する（例：会計取り消し後、日をまたいで再会計すると退店時刻が翌日になってしまう場合の是正用）。
+  // 修正内容は tab_logs に残し、不正確な打刻の見える化・追跡ができるようにする
+  async function saveTimes() {
+    if (!activeTab || !storeId) return;
+    setTimesError(null);
+
+    const newCreated = new Date(createdAtDraft);
+    if (isNaN(newCreated.getTime())) {
+      setTimesError("来店時刻の形式が正しくありません。");
+      return;
+    }
+
+    let newClosed: Date | null = null;
+    if (activeTab.closed_at) {
+      if (!closedAtDraft.trim()) {
+        setTimesError("退店時刻を入力してください。");
+        return;
+      }
+      newClosed = new Date(closedAtDraft);
+      if (isNaN(newClosed.getTime())) {
+        setTimesError("退店時刻の形式が正しくありません。");
+        return;
+      }
+      if (newClosed <= newCreated) {
+        setTimesError("退店時刻は来店時刻より後にしてください。");
+        return;
+      }
+    }
+
+    const oldCreatedLabel = formatDateTime(activeTab.created_at);
+    const oldClosedLabel = activeTab.closed_at ? formatDateTime(activeTab.closed_at) : null;
+    const newCreatedLabel = formatDateTime(newCreated.toISOString());
+    const newClosedLabel = newClosed ? formatDateTime(newClosed.toISOString()) : null;
+
+    await supabase
+      .from("tabs")
+      .update({
+        created_at: newCreated.toISOString(),
+        ...(newClosed ? { closed_at: newClosed.toISOString() } : {}),
+      })
+      .eq("id", activeTab.id);
+
+    const noteParts: string[] = [];
+    if (oldCreatedLabel !== newCreatedLabel) noteParts.push(`来店 ${oldCreatedLabel} → ${newCreatedLabel}`);
+    if (newClosed && oldClosedLabel !== newClosedLabel) noteParts.push(`退店 ${oldClosedLabel} → ${newClosedLabel}`);
+
+    if (noteParts.length > 0) {
+      await supabase.from("tab_logs").insert({
+        store_id: storeId,
+        action: "time_edited",
+        tab_name: activeTab.name,
+        business_date: activeTab.business_date,
+        guest_count: activeTab.guest_count,
+        note: noteParts.join(" ・ "),
+      });
+    }
+
+    setEditingTimes(false);
     loadData();
   }
 
@@ -1082,12 +1167,50 @@ function POSPageInner() {
               )}
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <span>
-                来店 {formatTime(activeTab.created_at)}
-                {activeTab.closed_at && <> ・退店 {formatTime(activeTab.closed_at)}</>}
-              </span>
-              {!activeTab.closed_at && (
+            {editingTimes ? (
+              <div className="rounded-md bg-bg2 border border-gold/50 px-2.5 py-2 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap text-xs text-gray-300">
+                  <span className="flex items-center gap-1">
+                    来店
+                    <input
+                      type="datetime-local"
+                      value={createdAtDraft}
+                      onChange={(e) => setCreatedAtDraft(e.target.value)}
+                      className="rounded-md bg-bg border border-line px-1.5 py-0.5 text-xs"
+                    />
+                  </span>
+                  {activeTab.closed_at && (
+                    <span className="flex items-center gap-1">
+                      退店
+                      <input
+                        type="datetime-local"
+                        value={closedAtDraft}
+                        onChange={(e) => setClosedAtDraft(e.target.value)}
+                        className="rounded-md bg-bg border border-line px-1.5 py-0.5 text-xs"
+                      />
+                    </span>
+                  )}
+                </div>
+                {timesError && <p className="text-rose text-[11px]">{timesError}</p>}
+                <div className="flex items-center gap-3">
+                  <button onClick={saveTimes} className="text-gold text-xs font-bold">
+                    保存
+                  </button>
+                  <button onClick={() => setEditingTimes(false)} className="text-gray-400 text-xs">
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                <span>
+                  来店 {formatTime(activeTab.created_at)}
+                  {activeTab.closed_at && <> ・退店 {formatTime(activeTab.closed_at)}</>}
+                  <button onClick={openTimeEditor} className="ml-1.5 text-gray-500 underline">
+                    編集
+                  </button>
+                </span>
+                {!activeTab.closed_at && (
                 <span className="flex items-center gap-1">
                   人数
                   <input
@@ -1129,7 +1252,8 @@ function POSPageInner() {
                   名
                 </span>
               )}
-            </div>
+              </div>
+            )}
 
             {activeTab.course_ends_at && <CourseTimerBadge endsAt={activeTab.course_ends_at} now={now} />}
 

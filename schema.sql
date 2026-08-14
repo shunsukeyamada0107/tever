@@ -137,17 +137,18 @@ create table tab_items (
   created_at  timestamptz not null default now()
 );
 
--- 伝票の作成・削除ログ（設定タブで確認用。特に削除は会計前後の伝票消しによる不正の見える化が目的なので、
--- 削除時点の点数・金額をスナップショットとして残す）
+-- 伝票の作成・削除・来店退店時刻の修正ログ（設定タブで確認用。特に削除・時刻修正は
+-- 不正やデータ修正の見える化が目的なので、変更内容をスナップショットとして残す）
 create table tab_logs (
   id            uuid primary key default gen_random_uuid(),
   store_id      uuid not null references stores(id) on delete cascade,
-  action        text not null check (action in ('created', 'deleted')),
+  action        text not null check (action in ('created', 'deleted', 'time_edited')),
   tab_name      text not null,
   business_date date not null,
   guest_count   integer,
-  item_count    integer,   -- 削除時点の点数（作成時はnull）
-  total_amount  numeric,   -- 削除時点の合計金額（作成時はnull）
+  item_count    integer,   -- 削除時点の点数（作成時・時刻修正時はnull）
+  total_amount  numeric,   -- 削除時点の合計金額（作成時・時刻修正時はnull）
+  note          text,      -- 自由記述の補足（time_editedでは「来店 8/10 23:05 → 8/11 00:15」等の変更内容）
   created_at    timestamptz not null default now()
 );
 

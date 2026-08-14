@@ -82,7 +82,7 @@ export type TabItem = {
 
 export type TabWithItems = Tab & { tab_items: TabItem[] };
 
-export type TabLogAction = "created" | "deleted";
+export type TabLogAction = "created" | "deleted" | "time_edited";
 
 export type TabLog = {
   id: string;
@@ -93,6 +93,7 @@ export type TabLog = {
   guest_count: number | null;
   item_count: number | null;
   total_amount: number | null;
+  note: string | null;
   created_at: string;
 };
 

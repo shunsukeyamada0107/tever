@@ -1224,8 +1224,16 @@ export default function SettingsPage() {
               <div key={log.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className={log.action === "deleted" ? "text-rose font-bold" : "text-good font-bold"}>
-                      {log.action === "deleted" ? "🗑削除" : "🆕作成"}
+                    <span
+                      className={
+                        log.action === "deleted"
+                          ? "text-rose font-bold"
+                          : log.action === "time_edited"
+                          ? "text-gold font-bold"
+                          : "text-good font-bold"
+                      }
+                    >
+                      {log.action === "deleted" ? "🗑削除" : log.action === "time_edited" ? "🕒時刻修正" : "🆕作成"}
                     </span>
                     <span className="font-bold text-gray-200 truncate">{log.tab_name}</span>
                   </div>
@@ -1239,6 +1247,7 @@ export default function SettingsPage() {
                     })}
                     {log.guest_count != null && ` ・${log.guest_count}名`}
                   </div>
+                  {log.note && <div className="text-xs text-gold mt-0.5">{log.note}</div>}
                 </div>
                 {log.action === "deleted" && log.total_amount != null && (
                   <div className="text-right shrink-0">
