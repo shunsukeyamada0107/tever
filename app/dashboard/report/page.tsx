@@ -93,25 +93,50 @@ function buildHeatmap(rows: TabWithItems[]): number[][] {
 
 type RepeatCustomerRow = { name: string; visits: number; total: number; lastVisit: string };
 
-// 伝票名の完全一致で来店回数・累計売上を集計し、2回以上来店した名前だけを返す
+const REPEAT_NAME_SIMILARITY_THRESHOLD = 0.8;
+
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+// 編集距離ベースの類似度（1 = 完全一致、0 = 全く別の文字列）
+function nameSimilarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshteinDistance(a, b) / maxLen;
+}
+
+// 伝票名を8割以上一致する表記ゆれ（タイポ・送り仮名違い等）ごとにまとめて来店回数・累計売上を集計し、
+// 2回以上来店したグループだけを返す（グループ名は最初に登場した表記を代表として使う）
 function buildRepeatCustomers(rows: TabWithItems[], taxRate: number): RepeatCustomerRow[] {
-  const byName = new Map<string, RepeatCustomerRow>();
+  const clusters: RepeatCustomerRow[] = [];
   rows.forEach((t) => {
     const key = t.name.trim();
     if (!key) return;
     const amount = tabTotal(t.tab_items, taxRate, t.discount_percent, t.discount_amount);
-    const existing = byName.get(key);
-    if (existing) {
-      existing.visits += 1;
-      existing.total += amount;
-      if (t.created_at > existing.lastVisit) existing.lastVisit = t.created_at;
+    const cluster = clusters.find((c) => nameSimilarity(c.name, key) >= REPEAT_NAME_SIMILARITY_THRESHOLD);
+    if (cluster) {
+      cluster.visits += 1;
+      cluster.total += amount;
+      if (t.created_at > cluster.lastVisit) cluster.lastVisit = t.created_at;
     } else {
-      byName.set(key, { name: key, visits: 1, total: amount, lastVisit: t.created_at });
+      clusters.push({ name: key, visits: 1, total: amount, lastVisit: t.created_at });
     }
   });
-  return Array.from(byName.values())
-    .filter((r) => r.visits >= 2)
-    .sort((a, b) => b.visits - a.visits || b.total - a.total);
+  return clusters.filter((r) => r.visits >= 2).sort((a, b) => b.visits - a.visits || b.total - a.total);
 }
 
 type GenderTotals = { male: number; female: number; trackedTabs: number; totalTabs: number };
@@ -1374,7 +1399,7 @@ export default function ReportPage() {
             </div>
           )}
           <div className="text-xs text-gray-500 mt-2">
-            伝票名の完全一致で集計しています（同じ方でも表記ゆれがあると別カウントになります）
+            伝票名が8割以上一致する表記ゆれ（タイポ等）はまとめて集計しています。全く別の方が偶然まとめられてしまう場合もあるため、参考情報としてご活用ください
           </div>
         </div>
 
