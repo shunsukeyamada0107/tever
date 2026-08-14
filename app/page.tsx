@@ -144,6 +144,8 @@ const LP_STYLES = `
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     cursor: pointer;
     border: 1px solid transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .lp .btn-primary {
     background: linear-gradient(180deg, var(--blue-bright), var(--blue));
@@ -531,6 +533,13 @@ const LP_STYLES = `
     .lp .flow-list { grid-template-columns: 1fr; }
     .lp .form-grid { grid-template-columns: 1fr; }
     .lp .nav-links { display: none; }
+  }
+
+  @media (max-width: 420px) {
+    .lp .nav-inner { padding: 14px 16px; gap: 10px; }
+    .lp .brand-sub { display: none; }
+    .lp .brand-icon { height: 24px; }
+    .lp .nav .btn { padding: 8px 14px; font-size: 12.5px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
