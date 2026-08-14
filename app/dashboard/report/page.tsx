@@ -18,6 +18,7 @@ import {
   PAYMENT_METHOD_LABELS,
   itemSubtotal,
   tabSubtotal,
+  tabDiscountAmount,
   tabTax,
   tabTotal,
   daySummary,
@@ -427,6 +428,7 @@ export default function ReportPage() {
   const [customerResults, setCustomerResults] = useState<TabWithItems[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+  const [viewingTab, setViewingTab] = useState<TabWithItems | null>(null);
 
   const loadData = useCallback(async () => {
     if (!storeId) return;
@@ -1089,7 +1091,11 @@ export default function ReportPage() {
                   {expanded && (
                     <div className="mt-2 pt-2 border-t border-dashed border-line space-y-1.5">
                       {visits.map((t) => (
-                        <div key={t.id} className="text-xs bg-bg2 rounded-md px-2 py-1.5">
+                        <button
+                          key={t.id}
+                          onClick={() => setViewingTab(t)}
+                          className="w-full text-left text-xs bg-bg2 rounded-md px-2 py-1.5 active:bg-line"
+                        >
                           <div className="flex justify-between items-center gap-2">
                             <span className="text-gray-300 font-bold shrink-0">
                               {new Date(t.created_at).toLocaleDateString("ja-JP", {
@@ -1107,7 +1113,7 @@ export default function ReportPage() {
                           <div className="text-gray-500 mt-0.5 truncate">
                             {t.tab_items.length > 0 ? t.tab_items.map((i) => i.name).join("・") : "品目なし"}
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -1594,6 +1600,135 @@ export default function ReportPage() {
                 {copyLabel}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {viewingTab && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setViewingTab(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md max-h-[85vh] flex flex-col rounded-xl border border-line bg-elevated p-4 space-y-3"
+          >
+            <div className="flex justify-between items-start gap-2">
+              <div className="min-w-0">
+                <div className="text-gold font-bold text-base truncate">{viewingTab.name}</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {new Date(viewingTab.created_at).toLocaleString("ja-JP", {
+                    year: "numeric",
+                    month: "numeric",
+                    day: "numeric",
+                    weekday: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {viewingTab.closed_at && (
+                    <>
+                      {" "}
+                      〜{" "}
+                      {new Date(viewingTab.closed_at).toLocaleTimeString("ja-JP", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </>
+                  )}
+                </div>
+              </div>
+              <span
+                className={`text-xs rounded-full px-2 py-0.5 font-bold shrink-0 ${
+                  viewingTab.closed_at ? "bg-line text-gray-300" : "bg-gold/20 text-gold"
+                }`}
+              >
+                {viewingTab.closed_at ? "会計済み" : "対応中"}
+              </span>
+            </div>
+
+            <div className="text-xs text-gray-400 flex flex-wrap gap-x-3 gap-y-1">
+              {viewingTab.guest_count != null && (
+                <span>
+                  人数 {viewingTab.guest_count}名
+                  {(viewingTab.guest_count_male != null || viewingTab.guest_count_female != null) &&
+                    `（男${viewingTab.guest_count_male ?? 0}・女${viewingTab.guest_count_female ?? 0}）`}
+                </span>
+              )}
+              <span>担当 {staffName(viewingTab.staff_id)}</span>
+              {viewingTab.closed_at && viewingTab.payment_method && (
+                <span>
+                  {PAYMENT_METHOD_EMOJI[viewingTab.payment_method]} {PAYMENT_METHOD_LABELS[viewingTab.payment_method]}
+                </span>
+              )}
+            </div>
+
+            {viewingTab.memo && (
+              <div className="text-xs text-gray-400 bg-bg2 rounded-md px-2 py-1.5">📝 {viewingTab.memo}</div>
+            )}
+
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-line divide-y divide-line">
+              {viewingTab.tab_items.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center py-6">品目がありません</div>
+              ) : (
+                viewingTab.tab_items.map((i) => (
+                  <div key={i.id} className="flex justify-between items-center px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <div className="text-gray-200 truncate">
+                        {i.is_cast_drink && "🍾 "}
+                        {i.name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ¥{i.price.toLocaleString()} × {i.qty}
+                        {i.staff_id && ` ・👤${staffName(i.staff_id)}`}
+                      </div>
+                    </div>
+                    <div className="font-mono text-gray-300 shrink-0">{yen(itemSubtotal(i))}</div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="rounded-lg bg-bg2 px-3 py-2 font-mono text-sm space-y-1">
+              <div className="flex justify-between text-gray-400">
+                <span>小計</span>
+                <span>{yen(tabSubtotal(viewingTab.tab_items))}</span>
+              </div>
+              {!!(viewingTab.discount_percent || viewingTab.discount_amount) && (
+                <div className="flex justify-between text-rose">
+                  <span>割引{viewingTab.discount_percent ? `（${viewingTab.discount_percent}%OFF）` : ""}</span>
+                  <span>
+                    -
+                    {yen(
+                      tabDiscountAmount(
+                        viewingTab.tab_items,
+                        taxRate,
+                        viewingTab.discount_percent,
+                        viewingTab.discount_amount
+                      )
+                    )}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-400">
+                <span>消費税</span>
+                <span>{yen(tabTax(viewingTab.tab_items, taxRate))}</span>
+              </div>
+              <div className="flex justify-between text-gold font-bold text-base pt-1 border-t border-dashed border-line">
+                <span>合計</span>
+                <span>
+                  {yen(
+                    tabTotal(viewingTab.tab_items, taxRate, viewingTab.discount_percent, viewingTab.discount_amount)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewingTab(null)}
+              className="w-full rounded-md border border-line py-2.5 text-sm text-gray-300"
+            >
+              閉じる
+            </button>
           </div>
         </div>
       )}
