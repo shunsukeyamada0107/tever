@@ -1115,10 +1115,12 @@ export default function ReportPage() {
           <span className="text-gray-300 font-bold">売上－経費</span>
           <span className="text-right text-gold font-bold">{yen(summary.total - summary.expense)}</span>
           <span className="col-span-2 text-right text-xs text-gray-500 -mt-0.5">（消費税 {yen(summary.tax)}）</span>
-          <span className="text-gray-400 mt-2">現金 / カード / 未会計</span>
-          <span className="text-right mt-2">
-            {yen(summary.cash)} / {yen(summary.card)} / {yen(summary.unsettled)}
-          </span>
+          <span className="text-gray-400 mt-2">現金</span>
+          <span className="text-right mt-2">{yen(summary.cash)}</span>
+          <span className="text-gray-400">カード</span>
+          <span className="text-right">{yen(summary.card)}</span>
+          <span className="text-gray-400">未会計</span>
+          <span className="text-right">{yen(summary.unsettled)}</span>
           <span className="text-gray-400">平均滞在時間</span>
           <span className="text-right">{todayAvgStay != null ? formatMinutes(todayAvgStay) : "—"}</span>
         </div>
