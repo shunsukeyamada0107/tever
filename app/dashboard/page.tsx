@@ -25,6 +25,17 @@ import {
 
 const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
 
+// 伝票詳細のセクションは1セクション=1色にして、パッと見でどのブロックか判別できるようにする
+type SectionTone = "gold" | "blue" | "purple" | "good" | "warn" | "rose";
+const SECTION_TONES: Record<SectionTone, { bg: string; border: string; iconBg: string; iconText: string }> = {
+  gold: { bg: "bg-gold/25", border: "border-gold/50", iconBg: "bg-gold/30", iconText: "text-gold" },
+  blue: { bg: "bg-[#6FB3E0]/25", border: "border-[#6FB3E0]/50", iconBg: "bg-[#6FB3E0]/30", iconText: "text-[#6FB3E0]" },
+  purple: { bg: "bg-[#B78FE0]/25", border: "border-[#B78FE0]/50", iconBg: "bg-[#B78FE0]/30", iconText: "text-[#B78FE0]" },
+  good: { bg: "bg-good/25", border: "border-good/50", iconBg: "bg-good/30", iconText: "text-good" },
+  warn: { bg: "bg-warn/25", border: "border-warn/50", iconBg: "bg-warn/30", iconText: "text-warn" },
+  rose: { bg: "bg-rose/25", border: "border-rose/50", iconBg: "bg-rose/30", iconText: "text-rose" },
+};
+
 // カタカナ専用のオンスクリーンキーボード。ひらがな50音表そのままの見た目で全部タップできるようにし、
 // 濁点・半濁点は入力後の文字に後付けする方式（か→が）。OSの日本語入力（IME）を経由しないため、
 // 変換中の文字がonChangeで消されて入力できなくなる不具合を避けられる。実際に入る文字はカタカナ。
@@ -866,10 +877,19 @@ function POSPageInner() {
     );
   }
 
-  function SectionHeader({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  function SectionHeader({
+    icon,
+    tone = "gold",
+    children,
+  }: {
+    icon: React.ReactNode;
+    tone?: SectionTone;
+    children: React.ReactNode;
+  }) {
+    const t = SECTION_TONES[tone];
     return (
       <div className="flex items-center gap-2.5 mb-3">
-        <span className="w-8 h-8 rounded-full bg-gold/12 text-gold flex items-center justify-center shrink-0">
+        <span className={`w-8 h-8 rounded-full ${t.iconBg} ${t.iconText} flex items-center justify-center shrink-0`}>
           {icon}
         </span>
         <span className="font-extrabold text-base">{children}</span>
@@ -1109,7 +1129,7 @@ function POSPageInner() {
         <>
           <div
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
-            className="rounded-xl border border-line bg-elevated p-4 space-y-3"
+            className="rounded-xl border border-gold/50 bg-gold/25 p-4 space-y-3"
           >
             <div className="flex justify-between items-center gap-2">
               {editingTabName ? (
@@ -1377,8 +1397,8 @@ function POSPageInner() {
           </div>
 
           {staff.length > 0 && (
-            <div className="rounded-xl border border-line bg-elevated p-4">
-              <SectionHeader icon={<PeopleSectionIcon />}>担当スタッフ（この伝票の歩合対象）</SectionHeader>
+            <div className="rounded-xl border border-[#6FB3E0]/50 bg-[#6FB3E0]/25 p-4">
+              <SectionHeader icon={<PeopleSectionIcon />} tone="blue">担当スタッフ（この伝票の歩合対象）</SectionHeader>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {staff.map((s) => (
                   <button
@@ -1400,8 +1420,8 @@ function POSPageInner() {
             </div>
           )}
 
-          <div className="rounded-xl border border-line p-4">
-            <SectionHeader icon={<ReceiptSectionIcon />}>
+          <div className="rounded-xl border border-[#B78FE0]/50 bg-[#B78FE0]/25 p-4">
+            <SectionHeader icon={<ReceiptSectionIcon />} tone="purple">
               伝票内容（{activeTab.tab_items.reduce((a, i) => a + i.qty, 0)}点）
             </SectionHeader>
             {activeTab.tab_items.length === 0 ? (
@@ -1489,8 +1509,8 @@ function POSPageInner() {
             )}
           </div>
 
-          <div className="rounded-xl border border-line bg-elevated p-4">
-            <SectionHeader icon={<CupSectionIcon />}>メニュー</SectionHeader>
+          <div className="rounded-xl border border-good/50 bg-good/25 p-4">
+            <SectionHeader icon={<CupSectionIcon />} tone="good">メニュー</SectionHeader>
             {quickPickItems.length > 0 && (
               <div className="mb-3">
                 <div className="text-sm font-extrabold text-gold mb-1.5">⭐ よく出る商品</div>
@@ -1526,8 +1546,8 @@ function POSPageInner() {
           </div>
 
           {!activeTab.closed_at && (
-            <div className="rounded-xl border border-line bg-elevated p-4">
-              <SectionHeader icon={<PlusSectionIcon />}>自由入力で追加</SectionHeader>
+            <div className="rounded-xl border border-warn/50 bg-warn/25 p-4">
+              <SectionHeader icon={<PlusSectionIcon />} tone="warn">自由入力で追加</SectionHeader>
               <div className="flex gap-2">
                 <input
                   value={manualName}
@@ -1554,9 +1574,9 @@ function POSPageInner() {
 
           <div
             style={{ borderLeftColor: tabColorFor(activeTab.id), borderLeftWidth: 5 }}
-            className="rounded-xl border border-line bg-elevated p-4"
+            className="rounded-xl border border-rose/50 bg-rose/25 p-4"
           >
-            <SectionHeader icon={<CashSectionIcon />}>会計</SectionHeader>
+            <SectionHeader icon={<CashSectionIcon />} tone="rose">会計</SectionHeader>
             {renderCheckoutSummary(activeTab)}
           </div>
         </>
