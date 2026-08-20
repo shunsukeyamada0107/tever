@@ -22,6 +22,7 @@ import {
   tabTotal,
   UNCATEGORIZED_LABEL,
 } from "@/lib/types";
+import { AnimatedNumber } from "@/lib/AnimatedNumber";
 
 const LAST_ORDER_WINDOW_MS = 30 * 60 * 1000;
 
@@ -192,6 +193,8 @@ function POSPageInner() {
   const [tabs, setTabs] = useState<TabWithItems[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [justCreatedTabId, setJustCreatedTabId] = useState<string | null>(null);
+  const [pendingSettleMethod, setPendingSettleMethod] = useState<PaymentMethod | null>(null);
   const [modalName, setModalName] = useState("");
   const [nameSearchResults, setNameSearchResults] = useState<TabWithItems[]>([]);
   const [searchingName, setSearchingName] = useState(false);
@@ -453,6 +456,8 @@ function POSPageInner() {
     if (!error && data) {
       setActiveTabId(data.id);
       setShowCreateModal(false);
+      setJustCreatedTabId(data.id);
+      setTimeout(() => setJustCreatedTabId((cur) => (cur === data.id ? null : cur)), 400);
       loadData();
       await supabase.from("tab_logs").insert({
         store_id: storeId,
@@ -747,12 +752,16 @@ function POSPageInner() {
     loadData();
   }
 
-  async function settleTab(method: PaymentMethod) {
+  function requestSettle(method: PaymentMethod) {
     if (!activeTab) return;
-    const amount = tabTotal(activeTab.tab_items, taxRate, activeTab.discount_percent, activeTab.discount_amount);
-    const methodLabel = PAYMENT_METHOD_LABELS[method];
-    if (!confirm(`${methodLabel}で ¥${amount.toLocaleString()} を会計しますか？`)) return;
     setShowEpaymentPicker(false);
+    setPendingSettleMethod(method);
+  }
+
+  async function confirmSettle() {
+    if (!activeTab || !pendingSettleMethod) return;
+    const method = pendingSettleMethod;
+    setPendingSettleMethod(null);
     await supabase
       .from("tabs")
       .update({ payment_method: method, closed_at: new Date().toISOString() })
@@ -849,7 +858,7 @@ function POSPageInner() {
     return (
       <div className={`grid gap-3 ${single || multiple ? "grid-cols-2" : "grid-cols-1"}`}>
         <button
-          onClick={() => settleTab("cash")}
+          onClick={() => requestSettle("cash")}
           className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
         >
           {paymentIcon("cash")}
@@ -857,7 +866,7 @@ function POSPageInner() {
         </button>
         {single && (
           <button
-            onClick={() => settleTab(single.method)}
+            onClick={() => requestSettle(single.method)}
             className="rounded-xl bg-gold text-bg font-bold py-4 text-base flex flex-col items-center gap-1.5 shadow-premium active:scale-[0.97] transition-transform"
           >
             {paymentIcon(single.method)}
@@ -993,7 +1002,7 @@ function POSPageInner() {
         onClick={() => addMenuItem(m)}
         disabled={opts.disabled}
         style={{ borderLeftColor: color, borderLeftWidth: 4 }}
-        className={`group rounded-lg border border-line bg-elevated text-left disabled:opacity-40 active:bg-gold active:border-gold transition-colors ${
+        className={`group rounded-lg border border-line bg-elevated text-left disabled:opacity-40 active:bg-gold active:border-gold active:scale-[0.96] transition-transform transition-colors ${
           opts.big ? "p-4" : "p-3.5"
         }`}
       >
@@ -1024,7 +1033,11 @@ function POSPageInner() {
       <div className="grid grid-cols-2 gap-2.5">
         <div className="rounded-xl border border-line bg-elevated px-3.5 py-3">
           <div className="text-[10.5px] font-semibold text-gray-500">本日の売上（会計済み）</div>
-          <div className="text-lg font-bold text-gold mt-1 font-mono">¥{todaySalesTotal.toLocaleString()}</div>
+          <AnimatedNumber
+            value={todaySalesTotal}
+            prefix="¥"
+            className="block text-lg font-bold text-gold mt-1 font-mono"
+          />
         </div>
         <div className="rounded-xl border border-line bg-elevated px-3.5 py-3">
           <div className="text-[10.5px] font-semibold text-gray-500">対応中テーブル</div>
@@ -1066,7 +1079,7 @@ function POSPageInner() {
                     active
                       ? "bg-gold/10 border-gold/50 text-gray-200"
                       : "bg-elevated border-line text-gray-200"
-                  }`}
+                  } ${t.id === justCreatedTabId ? "animate-card-pop-in" : ""}`}
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-sm font-bold truncate">{t.name}</span>
@@ -1314,15 +1327,15 @@ function POSPageInner() {
               </div>
               <div className="flex justify-between text-gold font-bold text-lg pt-1 border-t border-dashed border-line">
                 <span>合計</span>
-                <span>
-                  ¥
-                  {tabTotal(
+                <AnimatedNumber
+                  value={tabTotal(
                     activeTab.tab_items,
                     taxRate,
                     activeTab.discount_percent,
                     activeTab.discount_amount
-                  ).toLocaleString()}
-                </span>
+                  )}
+                  prefix="¥"
+                />
               </div>
             </div>
 
@@ -1621,7 +1634,7 @@ function POSPageInner() {
             {enabledEpaymentMethods.map((m) => (
               <button
                 key={m.method}
-                onClick={() => settleTab(m.method)}
+                onClick={() => requestSettle(m.method)}
                 className="w-full rounded-xl border border-line py-3.5 text-sm font-bold text-gray-200 flex items-center justify-center gap-2"
               >
                 {paymentIcon(m.method)}
@@ -1638,6 +1651,46 @@ function POSPageInner() {
         </div>
       )}
 
+      {pendingSettleMethod && activeTab && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setPendingSettleMethod(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4 text-center animate-card-pop-in"
+          >
+            <div className="text-[15px] text-gray-200">
+              {PAYMENT_METHOD_LABELS[pendingSettleMethod]}で
+              <span className="block text-gold font-mono font-bold text-2xl mt-1">
+                ¥
+                {tabTotal(
+                  activeTab.tab_items,
+                  taxRate,
+                  activeTab.discount_percent,
+                  activeTab.discount_amount
+                ).toLocaleString()}
+              </span>
+              を会計しますか？
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingSettleMethod(null)}
+                className="flex-1 rounded-xl border border-line py-3 text-sm text-gray-300"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={confirmSettle}
+                className="flex-1 rounded-xl bg-gold text-bg py-3 text-sm font-bold active:scale-[0.97] transition-transform"
+              >
+                会計する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showReceipt && activeTab && (
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
@@ -1645,9 +1698,12 @@ function POSPageInner() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-sm rounded-xl border border-line bg-elevated p-5 space-y-4 max-h-[85vh] overflow-y-auto animate-card-pop-in"
           >
             <div className="text-center space-y-1">
+              <div className="animate-check-pop mx-auto w-12 h-12 rounded-full bg-gold flex items-center justify-center text-bg text-2xl font-bold">
+                ✓
+              </div>
               <div className="text-gold font-bold text-lg">{storeName ?? "お会計"}</div>
               {activeTab.closed_at && (
                 <div className="text-xs text-gray-400">

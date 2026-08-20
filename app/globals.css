@@ -24,3 +24,37 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* カード・モーダルの出現（伝票新規作成、レシートなど） */
+@keyframes card-pop-in {
+  0% { opacity: 0; transform: scale(0.9) translateY(6px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-card-pop-in { animation: card-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ページ／タブ切り替え時のフェード
+   transformは使わない：これをmainなど祖先要素に付けると、配下のposition:fixedモーダルの
+   containing blockがviewportからこの要素に変わってしまい、画面中央に出るはずのモーダルが
+   ページ最下部などに飛んで見えなくなる（実際にこの不具合が発生した） */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-page-fade-in { animation: page-fade-in 0.28s ease-out both; }
+
+/* 金額が増えた瞬間のハイライト */
+@keyframes number-flash {
+  0% { text-shadow: 0 0 0 rgb(var(--gold-rgb) / 0); }
+  30% { text-shadow: 0 0 16px rgb(var(--gold-rgb) / 0.9); }
+  100% { text-shadow: 0 0 0 rgb(var(--gold-rgb) / 0); }
+}
+.animate-number-flash { animation: number-flash 0.55s ease-out; }
+
+/* 会計完了チェックマークのポップ */
+@keyframes check-pop {
+  0% { opacity: 0; transform: scale(0.4) rotate(-15deg); }
+  60% { opacity: 1; transform: scale(1.15) rotate(4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.animate-check-pop { animation: check-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }

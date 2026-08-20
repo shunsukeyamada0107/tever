@@ -106,7 +106,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="min-h-screen pb-20">
           <ThemeStyle />
           <HeaderBar />
-          <main className="p-4">{children}</main>
+          <main key={pathname} className="p-4 animate-page-fade-in">
+            {children}
+          </main>
           <nav className="fixed bottom-0 left-0 right-0 flex border-t border-line bg-bg2/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
             {TABS.map((tab) => {
               const on = pathname === tab.href;
@@ -118,7 +120,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     on ? "text-gold" : "text-gray-500"
                   }`}
                 >
-                  <span className="w-[22px] h-[22px]">{tab.icon}</span>
+                  <span className={`w-[22px] h-[22px] transition-transform duration-200 ${on ? "scale-110" : "scale-100"}`}>
+                    {tab.icon}
+                  </span>
                   {tab.label}
                 </Link>
               );
